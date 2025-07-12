@@ -132,61 +132,61 @@ impl Interpreter {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a + b);
+                    self.stack.push(b + a);
                 }
                 OpKind::Minus => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a - b);
+                    self.stack.push(b - a);
                 }
                 OpKind::Multiply => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a * b);
+                    self.stack.push(b * a);
                 }
                 OpKind::Divide => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a / b);
+                    self.stack.push(b / a);
                 }
                 OpKind::Modulo => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a % b);
+                    self.stack.push(b % a);
                 }
                 OpKind::LessThan => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a < b));
+                    self.stack.push(Value::Bool(b < a));
                 }
                 OpKind::LessThanEquals => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a <= b));
+                    self.stack.push(Value::Bool(b <= a));
                 }
                 OpKind::GreaterThan => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a > b));
+                    self.stack.push(Value::Bool(b > a));
                 }
                 OpKind::GreaterThanEquals => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a >= b));
+                    self.stack.push(Value::Bool(b >= a));
                 }
                 OpKind::Equals => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a == b));
+                    self.stack.push(Value::Bool(b == a));
                 }
                 OpKind::Not => {
                     if let Value::Bool(value) = self.stack.pop().unwrap() {
