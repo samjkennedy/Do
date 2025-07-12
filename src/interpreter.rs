@@ -132,61 +132,61 @@ impl Interpreter {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a + b);
+                    self.stack.push(b + a);
                 }
                 OpKind::Minus => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a - b);
+                    self.stack.push(b - a);
                 }
                 OpKind::Multiply => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a * b);
+                    self.stack.push(b * a);
                 }
                 OpKind::Divide => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a / b);
+                    self.stack.push(b / a);
                 }
                 OpKind::Modulo => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a % b);
+                    self.stack.push(b % a);
                 }
                 OpKind::LessThan => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a < b));
+                    self.stack.push(Value::Bool(b < a));
                 }
                 OpKind::LessThanEquals => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a <= b));
+                    self.stack.push(Value::Bool(b <= a));
                 }
                 OpKind::GreaterThan => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a > b));
+                    self.stack.push(Value::Bool(b > a));
                 }
                 OpKind::GreaterThanEquals => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a >= b));
+                    self.stack.push(Value::Bool(b >= a));
                 }
                 OpKind::Equals => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Bool(a == b));
+                    self.stack.push(Value::Bool(b == a));
                 }
                 OpKind::Not => {
                     if let Value::Bool(value) = self.stack.pop().unwrap() {
@@ -199,6 +199,13 @@ impl Interpreter {
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a.clone());
                     self.stack.push(a);
+                }
+                OpKind::Len => {
+                    if let Value::List(values) = self.stack.pop().unwrap() {
+                        self.stack.push(Value::Int(values.len() as i64));
+                    } else {
+                        unreachable!()
+                    }
                 }
                 OpKind::Over => {
                     let a = self.stack.pop().unwrap();
@@ -229,6 +236,13 @@ impl Interpreter {
                     let a = self.stack.pop().unwrap();
                     println!("{}", a);
                 }
+                OpKind::Do => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        self.interpret(ops);
+                    } else {
+                        unreachable!()
+                    }
+                }
                 OpKind::Filter => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {
@@ -255,6 +269,20 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::Foreach => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            for value in values {
+                                self.stack.push(value.clone());
+                                self.interpret(ops);
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
                 OpKind::Map => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {
@@ -264,6 +292,25 @@ impl Interpreter {
                                 sub_interpreter.interpret(ops);
                             }
                             self.stack.push(Value::List(sub_interpreter.stack));
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Fold => {
+                    let mut acc = self.stack.pop().unwrap();
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            let mut sub_interpreter = Interpreter::new();
+                            for value in values {
+                                sub_interpreter.stack.push(acc.clone());
+                                sub_interpreter.stack.push(value.clone());
+                                sub_interpreter.interpret(ops);
+                                acc = sub_interpreter.stack.pop().unwrap();
+                            }
+                            self.stack.push(acc);
                         } else {
                             unreachable!()
                         }
