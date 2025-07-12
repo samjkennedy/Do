@@ -3,6 +3,7 @@ use crate::lexer::{Span, Token, TokenKind};
 
 #[derive(Debug)]
 pub enum OpKind {
+    PushBool(bool),
     PushInt(i64),
     PushList(Vec<Op>),
     Plus,
@@ -10,6 +11,12 @@ pub enum OpKind {
     Multiply,
     Divide,
     Modulo,
+    LessThan,
+    LessThanEquals,
+    GreaterThan,
+    GreaterThanEquals,
+    Equals,
+    Not,
     Over,
     Pop,
     Rot,
@@ -45,6 +52,10 @@ impl Parser {
         self.cursor += 1;
 
         match token.kind {
+            TokenKind::BoolLiteral(value) => Some(Op {
+                kind: OpKind::PushBool(value),
+                span: token.span,
+            }),
             TokenKind::IntLiteral(value) => Some(Op {
                 kind: OpKind::PushInt(value),
                 span: token.span,
@@ -67,6 +78,30 @@ impl Parser {
             }),
             TokenKind::Percent => Some(Op {
                 kind: OpKind::Modulo,
+                span: token.span,
+            }),
+            TokenKind::OpenAngle => Some(Op {
+                kind: OpKind::LessThan,
+                span: token.span,
+            }),
+            TokenKind::OpenAngleEquals => Some(Op {
+                kind: OpKind::LessThanEquals,
+                span: token.span,
+            }),
+            TokenKind::CloseAngle => Some(Op {
+                kind: OpKind::GreaterThan,
+                span: token.span,
+            }),
+            TokenKind::CloseAngleEquals => Some(Op {
+                kind: OpKind::GreaterThanEquals,
+                span: token.span,
+            }),
+            TokenKind::Equals => Some(Op {
+                kind: OpKind::Equals,
+                span: token.span,
+            }),
+            TokenKind::Bang => Some(Op {
+                kind: OpKind::Not,
                 span: token.span,
             }),
             TokenKind::OpenSquare => {

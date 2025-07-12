@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
 enum TypeKind {
+    Bool,
     Int,
     List(Box<TypeKind>),
     Generic(usize),
@@ -14,6 +15,7 @@ enum TypeKind {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            TypeKind::Bool => write!(f, "bool"),
             TypeKind::Int => write!(f, "int"),
             TypeKind::List(el_type) => write!(f, "[{}]", el_type),
             TypeKind::Generic(n) => write!(f, "<{}>", n),
@@ -44,13 +46,15 @@ impl TypeChecker {
 
             for input in ins {
                 match self.type_stack.pop() {
-                    Some((type_kind, _span)) => match input {
+                    Some((type_kind, span)) => match input {
                         //TODO fix the clone
                         TypeKind::Generic(index) => match self.erasures.clone().get(index) {
-                            Some(erased) => self.expect_type(op, &type_kind, erased),
+                            //TODO: is it clearer to report the op span or the type's span?
+                            //      should report both really
+                            Some(erased) => self.expect_type(&type_kind, erased, span),
                             None => self.erasures.insert(index, type_kind),
                         },
-                        _ => self.expect_type(op, &type_kind, &input),
+                        _ => self.expect_type(&type_kind, &input, span),
                     },
                     None => self.diagnostics.push(Diagnostic::report_error(
                         format!("Expected {} but stack was empty", input),
@@ -81,11 +85,11 @@ impl TypeChecker {
         }
     }
 
-    fn expect_type(&mut self, op: &Op, actual: &TypeKind, expected: &TypeKind) {
+    fn expect_type(&mut self, actual: &TypeKind, expected: &TypeKind, span: Span) {
         if expected != actual {
             self.diagnostics.push(Diagnostic::report_error(
                 format!("Expected {} but got {}", expected, actual),
-                op.span,
+                span,
             ))
         }
     }
@@ -98,6 +102,7 @@ impl TypeChecker {
 
     fn get_signature(&mut self, op_kind: &OpKind) -> (Vec<TypeKind>, Vec<TypeKind>) {
         match op_kind {
+            OpKind::PushBool(_) => (vec![], vec![TypeKind::Bool]),
             OpKind::PushInt(_) => (vec![], vec![TypeKind::Int]),
             OpKind::PushList(ops) => {
                 let mut element_type: Option<TypeKind> = None;
@@ -111,7 +116,7 @@ impl TypeChecker {
                     }
                     let out = outs.first().unwrap();
                     match &element_type {
-                        Some(type_kind) => self.expect_type(op, type_kind, out),
+                        Some(type_kind) => self.expect_type(type_kind, out, op.span),
                         None => element_type = Some(out.clone()),
                     }
                 }
@@ -129,7 +134,20 @@ impl TypeChecker {
             OpKind::Plus | OpKind::Minus | OpKind::Multiply | OpKind::Divide | OpKind::Modulo => {
                 (vec![TypeKind::Int, TypeKind::Int], vec![TypeKind::Int])
             }
-
+            OpKind::LessThan
+            | OpKind::GreaterThan
+            | OpKind::LessThanEquals
+            | OpKind::GreaterThanEquals => {
+                (vec![TypeKind::Int, TypeKind::Int], vec![TypeKind::Bool])
+            }
+            OpKind::Equals => {
+                let index = self.create_generic();
+                (
+                    vec![TypeKind::Generic(index), TypeKind::Generic(index)],
+                    vec![TypeKind::Bool],
+                )
+            }
+            OpKind::Not => (vec![TypeKind::Bool], vec![TypeKind::Bool]),
             OpKind::Dup => {
                 let index = self.create_generic();
                 (

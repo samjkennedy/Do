@@ -3,11 +3,18 @@ use crate::diagnostic::Diagnostic;
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
     IntLiteral(i64),
+    BoolLiteral(bool),
     Plus,
     Minus,
     Star,
     Slash,
     Percent,
+    OpenAngle,
+    OpenAngleEquals,
+    CloseAngle,
+    CloseAngleEquals,
+    Equals,
+    Bang,
     OpenSquare,
     CloseSquare,
     DupKeyword,
@@ -65,6 +72,20 @@ impl Lexer {
                 '*' => self.lex_token(c, TokenKind::Star),
                 '/' => self.lex_token(c, TokenKind::Slash),
                 '%' => self.lex_token(c, TokenKind::Percent),
+                '<' => self.lex_multichar_token(
+                    c,
+                    '=',
+                    TokenKind::OpenAngleEquals,
+                    TokenKind::OpenAngle,
+                ),
+                '>' => self.lex_multichar_token(
+                    c,
+                    '=',
+                    TokenKind::CloseAngleEquals,
+                    TokenKind::CloseAngle,
+                ),
+                '=' => self.lex_token(c, TokenKind::Equals),
+                '!' => self.lex_token(c, TokenKind::Bang),
                 '[' => self.lex_token(c, TokenKind::OpenSquare),
                 ']' => self.lex_token(c, TokenKind::CloseSquare),
                 x if x.is_ascii_digit() => self.lex_number(),
@@ -94,6 +115,33 @@ impl Lexer {
         };
 
         Some(token)
+    }
+
+    fn lex_multichar_token(
+        &mut self,
+        c: char,
+        next: char,
+        if_match: TokenKind,
+        if_not_match: TokenKind,
+    ) -> Token {
+        if self.cursor < self.input.len() {
+            self.cursor += 1;
+            return match self.peek() {
+                Some(c) if c == next => {
+                    let token = Token {
+                        kind: if_match,
+                        span: Span {
+                            offset: self.cursor,
+                            length: 2,
+                        },
+                    };
+                    self.cursor += 1;
+                    token
+                }
+                _ => self.lex_token(c, if_not_match),
+            };
+        }
+        self.lex_token(c, if_not_match)
     }
 
     fn lex_token(&mut self, c: char, kind: TokenKind) -> Token {
@@ -180,6 +228,14 @@ impl Lexer {
             },
             "print" => Token {
                 kind: TokenKind::PrintKeyword,
+                span: Span { offset, length },
+            },
+            "true" => Token {
+                kind: TokenKind::BoolLiteral(true),
+                span: Span { offset, length },
+            },
+            "false" => Token {
+                kind: TokenKind::BoolLiteral(false),
                 span: Span { offset, length },
             },
             &_ => {
