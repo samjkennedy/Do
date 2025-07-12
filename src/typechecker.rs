@@ -67,7 +67,7 @@ impl TypeChecker {
                         TypeKind::Generic(index) => match self.erasures.clone().get(index) {
                             //TODO: is it clearer to report the op span or the type's span?
                             //      should report both really
-                            Some(erased) => self.expect_type(&type_kind, erased, span),
+                            Some(erased) => self.expect_type(&type_kind, erased, op.span),
                             None => self.erasures.insert(index, type_kind),
                         },
                         _ => self.expect_type(&type_kind, &input, span),
@@ -102,17 +102,52 @@ impl TypeChecker {
     }
 
     fn expect_type(&mut self, actual: &TypeKind, expected: &TypeKind, span: Span) {
-        if expected != actual {
-            self.diagnostics.push(Diagnostic::report_error(
-                format!("Expected {} but got {}", expected, actual),
-                span,
-            ))
+        match (actual, expected) {
+            (
+                TypeKind::Block {
+                    ins: actual_ins,
+                    outs: actual_outs,
+                },
+                TypeKind::Block {
+                    ins: expected_ins,
+                    outs: expected_outs,
+                },
+            ) => {
+                if actual_ins.len() != expected_ins.len()
+                    || actual_outs.len() != expected_outs.len()
+                {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        format!("Expected {} but got {}", expected, actual),
+                        span,
+                    ))
+                }
+                for (actual_in, expected_in) in actual_ins.iter().zip(expected_ins.iter()) {
+                    self.expect_type(actual_in, expected_in, span);
+                }
+                for (actual_out, expected_out) in actual_outs.iter().zip(expected_outs.iter()) {
+                    self.expect_type(actual_out, expected_out, span);
+                }
+            }
+            (TypeKind::Generic(index), expected) => todo!(),
+            (actual, TypeKind::Generic(index)) => match self.erasures.clone().get(*index) {
+                None => self.erasures.insert(*index, actual.clone()),
+                Some(type_kind) => self.expect_type(actual, type_kind, span),
+            },
+            _ => {
+                if expected != actual {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        format!("Expected {} but got {}", expected, actual),
+                        span,
+                    ))
+                }
+            }
         }
     }
 
     fn create_generic(&mut self) -> usize {
         let generic_index = self.next_generic_index;
         self.next_generic_index += 1;
+
         generic_index
     }
 
@@ -283,6 +318,18 @@ impl TypeChecker {
                 let index = self.create_generic();
 
                 (vec![TypeKind::Generic(index)], vec![])
+            }
+            OpKind::Map => {
+                let a = self.create_generic();
+                let b = self.create_generic();
+
+                (
+                    vec![TypeKind::Block {
+                        ins: vec![TypeKind::Generic(a)],
+                        outs: vec![TypeKind::Generic(b)],
+                    }],
+                    vec![],
+                )
             }
         }
     }

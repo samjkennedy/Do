@@ -25,6 +25,7 @@ pub enum TokenKind {
     RotKeyword,
     SwapKeyword,
     PrintKeyword,
+    MapKeyword,
     Error(String),
 }
 
@@ -142,7 +143,10 @@ impl Lexer {
                     self.cursor += 1;
                     token
                 }
-                _ => self.lex_token(c, if_not_match),
+                _ => {
+                    self.cursor -= 1; //backpedal
+                    self.lex_token(c, if_not_match)
+                }
             };
         }
         self.lex_token(c, if_not_match)
@@ -240,6 +244,10 @@ impl Lexer {
             },
             "false" => Token {
                 kind: TokenKind::BoolLiteral(false),
+                span: Span { offset, length },
+            },
+            "map" => Token {
+                kind: TokenKind::MapKeyword,
                 span: Span { offset, length },
             },
             &_ => {
