@@ -8,6 +8,7 @@ enum Value {
     Bool(bool),
     Int(i64),
     List(Vec<Value>),
+    Block(Vec<Op>),
 }
 
 impl Display for Value {
@@ -24,6 +25,7 @@ impl Display for Value {
                     .collect::<Vec<String>>()
                     .join(" ")
             ),
+            Value::Block(_) => write!(f, "fn"),
         }
     }
 }
@@ -117,10 +119,14 @@ impl Interpreter {
                     for op in ops {
                         match op.kind {
                             OpKind::PushInt(value) => values.push(Value::Int(value)),
+                            OpKind::PushBool(value) => values.push(Value::Bool(value)),
                             _ => unreachable!(),
                         }
                     }
                     self.stack.push(Value::List(values));
+                }
+                OpKind::PushBlock(ops) => {
+                    self.stack.push(Value::Block(ops.clone()));
                 }
                 OpKind::Plus => {
                     let a = self.stack.pop().unwrap();
@@ -222,6 +228,48 @@ impl Interpreter {
                 OpKind::Print => {
                     let a = self.stack.pop().unwrap();
                     println!("{}", a);
+                }
+                OpKind::Filter => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            let mut sub_interpreter = Interpreter::new();
+                            for value in values {
+                                sub_interpreter.stack.push(value.clone());
+                                sub_interpreter.interpret(ops);
+                            }
+                            let mut results = Vec::new();
+                            for (i, result) in sub_interpreter.stack.iter().enumerate() {
+                                if let Value::Bool(result) = result {
+                                    if *result {
+                                        results.push(values[i].clone());
+                                    }
+                                } else {
+                                    unreachable!()
+                                }
+                            }
+                            self.stack.push(Value::List(results));
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Map => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            let mut sub_interpreter = Interpreter::new();
+                            for value in values {
+                                sub_interpreter.stack.push(value.clone());
+                                sub_interpreter.interpret(ops);
+                            }
+                            self.stack.push(Value::List(sub_interpreter.stack));
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
                 }
             }
         }

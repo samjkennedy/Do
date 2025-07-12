@@ -9,6 +9,8 @@ pub enum TokenKind {
     Star,
     Slash,
     Percent,
+    OpenParenthesis,
+    CloseParenthesis,
     OpenAngle,
     OpenAngleEquals,
     CloseAngle,
@@ -23,6 +25,8 @@ pub enum TokenKind {
     RotKeyword,
     SwapKeyword,
     PrintKeyword,
+    FilterKeyword,
+    MapKeyword,
     Error(String),
 }
 
@@ -72,6 +76,8 @@ impl Lexer {
                 '*' => self.lex_token(c, TokenKind::Star),
                 '/' => self.lex_token(c, TokenKind::Slash),
                 '%' => self.lex_token(c, TokenKind::Percent),
+                '(' => self.lex_token(c, TokenKind::OpenParenthesis),
+                ')' => self.lex_token(c, TokenKind::CloseParenthesis),
                 '<' => self.lex_multichar_token(
                     c,
                     '=',
@@ -138,7 +144,10 @@ impl Lexer {
                     self.cursor += 1;
                     token
                 }
-                _ => self.lex_token(c, if_not_match),
+                _ => {
+                    self.cursor -= 1; //backpedal
+                    self.lex_token(c, if_not_match)
+                }
             };
         }
         self.lex_token(c, if_not_match)
@@ -236,6 +245,14 @@ impl Lexer {
             },
             "false" => Token {
                 kind: TokenKind::BoolLiteral(false),
+                span: Span { offset, length },
+            },
+            "filter" => Token {
+                kind: TokenKind::FilterKeyword,
+                span: Span { offset, length },
+            },
+            "map" => Token {
+                kind: TokenKind::MapKeyword,
                 span: Span { offset, length },
             },
             &_ => {

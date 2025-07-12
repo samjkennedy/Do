@@ -1,7 +1,7 @@
 # TODO
 
-- [~] Diagnostics
+- [x] Diagnostics
 - [x] Better Type Checking
-- [] Lists
-- [] Functions
+- [x] Lists
+- [x] Functions
 - [] REPL

@@ -9,6 +9,10 @@ enum TypeKind {
     Bool,
     Int,
     List(Box<TypeKind>),
+    Block {
+        ins: Vec<TypeKind>,
+        outs: Vec<TypeKind>,
+    },
     Generic(usize),
 }
 
@@ -18,6 +22,18 @@ impl Display for TypeKind {
             TypeKind::Bool => write!(f, "bool"),
             TypeKind::Int => write!(f, "int"),
             TypeKind::List(el_type) => write!(f, "[{}]", el_type),
+            TypeKind::Block { ins, outs } => write!(
+                f,
+                "fn [{} -- {}]",
+                ins.iter()
+                    .map(|el| el.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                outs.iter()
+                    .map(|el| el.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
             TypeKind::Generic(n) => write!(f, "<{}>", n),
         }
     }
@@ -51,7 +67,7 @@ impl TypeChecker {
                         TypeKind::Generic(index) => match self.erasures.clone().get(index) {
                             //TODO: is it clearer to report the op span or the type's span?
                             //      should report both really
-                            Some(erased) => self.expect_type(&type_kind, erased, span),
+                            Some(erased) => self.expect_type(&type_kind, erased, op.span),
                             None => self.erasures.insert(index, type_kind),
                         },
                         _ => self.expect_type(&type_kind, &input, span),
@@ -86,17 +102,52 @@ impl TypeChecker {
     }
 
     fn expect_type(&mut self, actual: &TypeKind, expected: &TypeKind, span: Span) {
-        if expected != actual {
-            self.diagnostics.push(Diagnostic::report_error(
-                format!("Expected {} but got {}", expected, actual),
-                span,
-            ))
+        match (actual, expected) {
+            (
+                TypeKind::Block {
+                    ins: actual_ins,
+                    outs: actual_outs,
+                },
+                TypeKind::Block {
+                    ins: expected_ins,
+                    outs: expected_outs,
+                },
+            ) => {
+                if actual_ins.len() != expected_ins.len()
+                    || actual_outs.len() != expected_outs.len()
+                {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        format!("Expected {} but got {}", expected, actual),
+                        span,
+                    ))
+                }
+                for (actual_in, expected_in) in actual_ins.iter().zip(expected_ins.iter()) {
+                    self.expect_type(actual_in, expected_in, span);
+                }
+                for (actual_out, expected_out) in actual_outs.iter().zip(expected_outs.iter()) {
+                    self.expect_type(actual_out, expected_out, span);
+                }
+            }
+            (TypeKind::Generic(index), expected) => todo!(),
+            (actual, TypeKind::Generic(index)) => match self.erasures.clone().get(*index) {
+                None => self.erasures.insert(*index, actual.clone()),
+                Some(type_kind) => self.expect_type(actual, type_kind, span),
+            },
+            _ => {
+                if expected != actual {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        format!("Expected {} but got {}", expected, actual),
+                        span,
+                    ))
+                }
+            }
         }
     }
 
     fn create_generic(&mut self) -> usize {
         let generic_index = self.next_generic_index;
         self.next_generic_index += 1;
+
         generic_index
     }
 
@@ -130,6 +181,71 @@ impl TypeChecker {
                     }
                     Some(type_kind) => (vec![], vec![TypeKind::List(Box::new(type_kind))]),
                 }
+            }
+            OpKind::PushBlock(ops) => {
+                let mut ins: Vec<TypeKind> = Vec::new();
+                let mut outs: Vec<TypeKind> = Vec::new();
+
+                for op in ops {
+                    let (op_ins, op_outs) = self.get_signature(&op.kind);
+
+                    for op_in in op_ins {
+                        match outs.pop() {
+                            Some(TypeKind::Generic(index)) => {
+                                if let Some(erased) = self.erasures.clone().get(index) {
+                                    self.expect_type(erased, &op_in, op.span)
+                                } else if self.erasures.clone().get(index).is_none() {
+                                    self.erasures.insert(index, op_in)
+                                }
+                            }
+                            Some(out) => self.expect_type(&out, &op_in, op.span),
+                            None => match ins.pop() {
+                                Some(type_kind) => self.expect_type(&type_kind, &op_in, op.span),
+                                None => ins.push(op_in),
+                            },
+                        }
+                    }
+
+                    for op_out in op_outs {
+                        match op_out {
+                            TypeKind::Generic(index) => match self.erasures.get(index) {
+                                Some(erased) => self.type_stack.push((erased.clone(), op.span)),
+                                None => outs.push(op_out),
+                            },
+                            _ => outs.push(op_out),
+                        }
+                    }
+                }
+
+                let mut erased_ins = Vec::new();
+                for block_in in ins {
+                    match block_in {
+                        TypeKind::Generic(index) => match self.erasures.clone().get(index) {
+                            Some(type_kind) => erased_ins.push(type_kind.clone()),
+                            None => erased_ins.push(block_in),
+                        },
+                        _ => erased_ins.push(block_in),
+                    }
+                }
+
+                let mut erased_outs = Vec::new();
+                for block_out in outs {
+                    match block_out {
+                        TypeKind::Generic(index) => match self.erasures.clone().get(index) {
+                            Some(type_kind) => erased_outs.push(type_kind.clone()),
+                            None => erased_outs.push(block_out),
+                        },
+                        _ => erased_outs.push(block_out),
+                    }
+                }
+
+                (
+                    vec![],
+                    vec![TypeKind::Block {
+                        ins: erased_ins,
+                        outs: erased_outs,
+                    }],
+                )
             }
             OpKind::Plus | OpKind::Minus | OpKind::Multiply | OpKind::Divide | OpKind::Modulo => {
                 (vec![TypeKind::Int, TypeKind::Int], vec![TypeKind::Int])
@@ -202,6 +318,32 @@ impl TypeChecker {
                 let index = self.create_generic();
 
                 (vec![TypeKind::Generic(index)], vec![])
+            }
+            //TODO: figure out why this works without having the lists in the ins and outs
+            OpKind::Filter => {
+                let a = self.create_generic();
+
+                (
+                    vec![
+                        TypeKind::Block {
+                            ins: vec![TypeKind::Generic(a)],
+                            outs: vec![TypeKind::Bool],
+                        },
+                    ],
+                    vec![],
+                )
+            }
+            OpKind::Map => {
+                let a = self.create_generic();
+                let b = self.create_generic();
+
+                (
+                    vec![TypeKind::Block {
+                        ins: vec![TypeKind::Generic(a)],
+                        outs: vec![TypeKind::Generic(b)],
+                    }],
+                    vec![],
+                )
             }
         }
     }
