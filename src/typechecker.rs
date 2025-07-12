@@ -137,6 +137,41 @@ impl TypeChecker {
                     vec![TypeKind::Generic(index), TypeKind::Generic(index)],
                 )
             }
+            OpKind::Over => {
+                let a = self.create_generic();
+                let b = self.create_generic();
+
+                (
+                    vec![TypeKind::Generic(a), TypeKind::Generic(b)],
+                    vec![
+                        TypeKind::Generic(a),
+                        TypeKind::Generic(b),
+                        TypeKind::Generic(a),
+                    ],
+                )
+            }
+            OpKind::Pop => {
+                let index = self.create_generic();
+
+                (vec![TypeKind::Generic(index)], vec![])
+            }
+            OpKind::Rot => {
+                let a = self.create_generic();
+                let b = self.create_generic();
+                let c = self.create_generic();
+                (
+                    vec![
+                        TypeKind::Generic(a),
+                        TypeKind::Generic(b),
+                        TypeKind::Generic(c),
+                    ],
+                    vec![
+                        TypeKind::Generic(b),
+                        TypeKind::Generic(c),
+                        TypeKind::Generic(a),
+                    ],
+                )
+            }
             OpKind::Swap => {
                 let a = self.create_generic();
                 let b = self.create_generic();

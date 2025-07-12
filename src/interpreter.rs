@@ -133,6 +133,25 @@ impl Interpreter {
                     self.stack.push(a.clone());
                     self.stack.push(a);
                 }
+                OpKind::Over => {
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
+
+                    self.stack.push(a.clone());
+                    self.stack.push(b);
+                    self.stack.push(a);
+                }
+                OpKind::Pop => {
+                    self.stack.pop().unwrap();
+                }
+                OpKind::Rot => {
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
+                    let c = self.stack.pop().unwrap();
+                    self.stack.push(b);
+                    self.stack.push(a);
+                    self.stack.push(c);
+                }
                 OpKind::Swap => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();

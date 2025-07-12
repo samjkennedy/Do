@@ -10,8 +10,11 @@ pub enum OpKind {
     Multiply,
     Divide,
     Modulo,
-    Dup,
+    Over,
+    Pop,
+    Rot,
     Swap,
+    Dup,
     Print,
 }
 
@@ -111,8 +114,20 @@ impl Parser {
                 kind: OpKind::Dup,
                 span: token.span,
             }),
+            TokenKind::OverKeyword => Some(Op {
+                kind: OpKind::Over,
+                span: token.span,
+            }),
+            TokenKind::PopKeyword => Some(Op {
+                kind: OpKind::Pop,
+                span: token.span,
+            }),
             TokenKind::SwapKeyword => Some(Op {
                 kind: OpKind::Swap,
+                span: token.span,
+            }),
+            TokenKind::RotKeyword => Some(Op {
+                kind: OpKind::Rot,
                 span: token.span,
             }),
             TokenKind::PrintKeyword => Some(Op {

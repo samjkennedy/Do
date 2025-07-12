@@ -11,6 +11,9 @@ pub enum TokenKind {
     OpenSquare,
     CloseSquare,
     DupKeyword,
+    OverKeyword,
+    PopKeyword,
+    RotKeyword,
     SwapKeyword,
     PrintKeyword,
     Error(String),
@@ -159,6 +162,18 @@ impl Lexer {
                 kind: TokenKind::DupKeyword,
                 span: Span { offset, length },
             },
+            "over" => Token {
+                kind: TokenKind::OverKeyword,
+                span: Span { offset, length },
+            },
+            "pop" => Token {
+                kind: TokenKind::PopKeyword,
+                span: Span { offset, length },
+            },
+            "rot" => Token {
+                kind: TokenKind::RotKeyword,
+                span: Span { offset, length },
+            },
             "swap" => Token {
                 kind: TokenKind::SwapKeyword,
                 span: Span { offset, length },
@@ -167,10 +182,17 @@ impl Lexer {
                 kind: TokenKind::PrintKeyword,
                 span: Span { offset, length },
             },
-            &_ => Token {
-                kind: TokenKind::Error(keyword.to_string()),
-                span: Span { offset, length },
-            },
+            &_ => {
+                let error = Token {
+                    kind: TokenKind::Error(keyword.to_string()),
+                    span: Span { offset, length },
+                };
+                self.diagnostics.push(Diagnostic::report_error(
+                    format!("Unexpected keyword `{}`", keyword),
+                    error.span,
+                ));
+                error
+            }
         }
     }
 }
