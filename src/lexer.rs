@@ -25,6 +25,7 @@ pub enum TokenKind {
     RotKeyword,
     SwapKeyword,
     PrintKeyword,
+    FilterKeyword,
     MapKeyword,
     Error(String),
 }
@@ -244,6 +245,10 @@ impl Lexer {
             },
             "false" => Token {
                 kind: TokenKind::BoolLiteral(false),
+                span: Span { offset, length },
+            },
+            "filter" => Token {
+                kind: TokenKind::FilterKeyword,
                 span: Span { offset, length },
             },
             "map" => Token {

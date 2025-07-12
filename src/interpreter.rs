@@ -229,6 +229,32 @@ impl Interpreter {
                     let a = self.stack.pop().unwrap();
                     println!("{}", a);
                 }
+                OpKind::Filter => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            let mut sub_interpreter = Interpreter::new();
+                            for value in values {
+                                sub_interpreter.stack.push(value.clone());
+                                sub_interpreter.interpret(ops);
+                            }
+                            let mut results = Vec::new();
+                            for (i, result) in sub_interpreter.stack.iter().enumerate() {
+                                if let Value::Bool(result) = result {
+                                    if *result {
+                                        results.push(values[i].clone());
+                                    }
+                                } else {
+                                    unreachable!()
+                                }
+                            }
+                            self.stack.push(Value::List(results));
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
                 OpKind::Map => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {

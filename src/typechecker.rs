@@ -319,6 +319,20 @@ impl TypeChecker {
 
                 (vec![TypeKind::Generic(index)], vec![])
             }
+            //TODO: figure out why this works without having the lists in the ins and outs
+            OpKind::Filter => {
+                let a = self.create_generic();
+
+                (
+                    vec![
+                        TypeKind::Block {
+                            ins: vec![TypeKind::Generic(a)],
+                            outs: vec![TypeKind::Bool],
+                        },
+                    ],
+                    vec![],
+                )
+            }
             OpKind::Map => {
                 let a = self.create_generic();
                 let b = self.create_generic();

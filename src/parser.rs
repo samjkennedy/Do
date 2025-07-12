@@ -24,7 +24,8 @@ pub enum OpKind {
     Swap,
     Dup,
     Print,
-    Map,
+    Filter,
+    Map
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +208,10 @@ impl Parser {
             }),
             TokenKind::PrintKeyword => Some(Op {
                 kind: OpKind::Print,
+                span: token.span,
+            }),
+            TokenKind::FilterKeyword => Some(Op {
+                kind: OpKind::Filter,
                 span: token.span,
             }),
             TokenKind::MapKeyword => Some(Op {
