@@ -285,6 +285,25 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::Fold => {
+                    let mut acc = self.stack.pop().unwrap();
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            let mut sub_interpreter = Interpreter::new();
+                            for value in values {
+                                sub_interpreter.stack.push(acc.clone());
+                                sub_interpreter.stack.push(value.clone());
+                                sub_interpreter.interpret(ops);
+                                acc = sub_interpreter.stack.pop().unwrap();
+                            }
+                            self.stack.push(acc);
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
             }
         }
     }

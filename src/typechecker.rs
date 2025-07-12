@@ -34,7 +34,7 @@ impl Display for TypeKind {
                     .collect::<Vec<_>>()
                     .join(" "),
             ),
-            TypeKind::Generic(n) => write!(f, "<{}>", n),
+            TypeKind::Generic(_) => write!(f, "<?>"),
         }
     }
 }
@@ -59,6 +59,8 @@ impl TypeChecker {
     pub fn type_check(&mut self, ops: &Vec<Op>) {
         for op in ops {
             let (ins, outs) = self.get_signature(&op.kind);
+
+            // println!("op: {:?}, ins: {:?}, outs: {:?}", op.kind, ins, outs);
 
             for input in ins {
                 match self.type_stack.pop() {
@@ -189,13 +191,12 @@ impl TypeChecker {
                 for op in ops {
                     let (op_ins, op_outs) = self.get_signature(&op.kind);
 
+                    // println!("  op: {:?}, op_ins: {:?}, op_outs: {:?}", op, op_ins, op_outs);
+
                     for op_in in op_ins {
                         match outs.pop() {
                             Some(out) => self.expect_type(&out, &op_in, op.span),
-                            None => match ins.pop() {
-                                Some(type_kind) => self.expect_type(&type_kind, &op_in, op.span),
-                                None => ins.push(op_in),
-                            },
+                            None => ins.push(op_in),
                         }
                     }
 
@@ -318,6 +319,21 @@ impl TypeChecker {
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
                     vec![TypeKind::List(Box::new(TypeKind::Generic(a)))],
+                )
+            }
+            OpKind::Fold => {
+                let a = self.create_generic();
+
+                (
+                    vec![
+                        TypeKind::Generic(a),
+                        TypeKind::Block {
+                            ins: vec![TypeKind::Generic(a), TypeKind::Generic(a)],
+                            outs: vec![TypeKind::Generic(a)],
+                        },
+                        TypeKind::List(Box::new(TypeKind::Generic(a))),
+                    ],
+                    vec![TypeKind::Generic(a)],
                 )
             }
             OpKind::Foreach => {

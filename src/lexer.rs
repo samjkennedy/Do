@@ -26,6 +26,7 @@ pub enum TokenKind {
     SwapKeyword,
     PrintKeyword,
     FilterKeyword,
+    FoldKeyword,
     ForeachKeyword,
     MapKeyword,
     Error(String),
@@ -250,6 +251,10 @@ impl Lexer {
             },
             "filter" => Token {
                 kind: TokenKind::FilterKeyword,
+                span: Span { offset, length },
+            },
+            "fold" => Token {
+                kind: TokenKind::FoldKeyword,
                 span: Span { offset, length },
             },
             "foreach" => Token {
