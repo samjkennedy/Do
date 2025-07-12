@@ -8,6 +8,7 @@ enum Value {
     Bool(bool),
     Int(i64),
     List(Vec<Value>),
+    Block(Vec<Op>),
 }
 
 impl Display for Value {
@@ -24,6 +25,7 @@ impl Display for Value {
                     .collect::<Vec<String>>()
                     .join(" ")
             ),
+            Value::Block(_) => write!(f, "fn"),
         }
     }
 }
@@ -117,10 +119,14 @@ impl Interpreter {
                     for op in ops {
                         match op.kind {
                             OpKind::PushInt(value) => values.push(Value::Int(value)),
+                            OpKind::PushBool(value) => values.push(Value::Bool(value)),
                             _ => unreachable!(),
                         }
                     }
                     self.stack.push(Value::List(values));
+                }
+                OpKind::PushBlock(ops) => {
+                    self.stack.push(Value::Block(ops.clone()));
                 }
                 OpKind::Plus => {
                     let a = self.stack.pop().unwrap();

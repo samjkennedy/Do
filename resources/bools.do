@@ -8,5 +8,3 @@ false print
 5 dup * 25 >= print
 
 true true = print
-
-4 true = print

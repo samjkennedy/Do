@@ -9,6 +9,8 @@ pub enum TokenKind {
     Star,
     Slash,
     Percent,
+    OpenParenthesis,
+    CloseParenthesis,
     OpenAngle,
     OpenAngleEquals,
     CloseAngle,
@@ -72,6 +74,8 @@ impl Lexer {
                 '*' => self.lex_token(c, TokenKind::Star),
                 '/' => self.lex_token(c, TokenKind::Slash),
                 '%' => self.lex_token(c, TokenKind::Percent),
+                '(' => self.lex_token(c, TokenKind::OpenParenthesis),
+                ')' => self.lex_token(c, TokenKind::CloseParenthesis),
                 '<' => self.lex_multichar_token(
                     c,
                     '=',

@@ -1,11 +1,12 @@
 use crate::diagnostic::Diagnostic;
 use crate::lexer::{Span, Token, TokenKind};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OpKind {
     PushBool(bool),
     PushInt(i64),
     PushList(Vec<Op>),
+    PushBlock(Vec<Op>),
     Plus,
     Minus,
     Multiply,
@@ -25,7 +26,7 @@ pub enum OpKind {
     Print,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Op {
     pub kind: OpKind,
     pub span: Span,
@@ -47,7 +48,7 @@ impl Parser {
     }
 
     pub fn parse_op(&mut self) -> Option<Op> {
-        let token = self.tokens.get(self.cursor)?;
+        let token = self.tokens.get(self.cursor)?.clone();
 
         self.cursor += 1;
 
@@ -104,9 +105,43 @@ impl Parser {
                 kind: OpKind::Not,
                 span: token.span,
             }),
-            TokenKind::OpenSquare => {
+            TokenKind::OpenParenthesis => {
                 let mut ops = Vec::new();
 
+                while self.cursor < self.tokens.len()
+                    && self.tokens[self.cursor].kind != TokenKind::CloseParenthesis
+                {
+                    ops.push(self.parse_op()?);
+                }
+
+                if self.cursor >= self.tokens.len() {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        "Block missing closing ')'".to_string(),
+                        Span::from_to(
+                            token.span,
+                            ops.last().map(|op| op.span).unwrap_or(token.span),
+                        ),
+                    ));
+                    return None;
+                }
+
+                let close_paren = self.tokens[self.cursor].clone();
+                self.cursor += 1; //skip closing paren
+
+                Some(Op {
+                    kind: OpKind::PushBlock(ops),
+                    span: Span::from_to(token.span, close_paren.span),
+                })
+            }
+            TokenKind::CloseParenthesis => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "unexpected token ')'".to_string(),
+                    token.span,
+                ));
+                None
+            }
+            TokenKind::OpenSquare => {
+                let mut ops = Vec::new();
                 loop {
                     match self.tokens.get(self.cursor) {
                         Some(next) => {
@@ -120,6 +155,10 @@ impl Parser {
                                 }
                                 TokenKind::IntLiteral(value) => ops.push(Op {
                                     kind: OpKind::PushInt(value),
+                                    span: token.span,
+                                }),
+                                TokenKind::BoolLiteral(value) => ops.push(Op {
+                                    kind: OpKind::PushBool(value),
                                     span: token.span,
                                 }),
                                 _ => self.diagnostics.push(Diagnostic::report_error(
