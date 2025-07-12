@@ -72,7 +72,7 @@ impl Parser {
                 kind: OpKind::Print,
                 span: token_span.clone(),
             }),
-            TokenKind::Error(_) | TokenKind::EOF => None,
+            TokenKind::Error(_) => None,
         }
     }
 }

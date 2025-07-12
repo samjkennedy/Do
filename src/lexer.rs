@@ -1,3 +1,5 @@
+use crate::diagnostic::Diagnostic;
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
     IntLiteral(i64),
@@ -10,7 +12,6 @@ pub enum TokenKind {
     SwapKeyword,
     PrintKeyword,
     Error(String),
-    EOF,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -28,11 +29,16 @@ pub struct Token {
 pub struct Lexer {
     input: String,
     cursor: usize,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Lexer {
     pub fn new(input: String) -> Lexer {
-        Lexer { input, cursor: 0 }
+        Lexer {
+            input,
+            cursor: 0,
+            diagnostics: Vec::new(),
+        }
     }
 
     pub fn next(&mut self) -> Option<Token> {
@@ -47,13 +53,26 @@ impl Lexer {
                 '%' => self.lex_token(c, TokenKind::Percent),
                 x if x.is_ascii_digit() => self.lex_number(),
                 x if x.is_alphabetic() || x == '_' => self.lex_keyword(),
-                _ => Token {
-                    kind: TokenKind::Error(c.to_string()),
-                    span: Span {
-                        offset: self.cursor,
-                        length: c.len_utf8(),
-                    },
-                },
+                _ => {
+                    let error = Token {
+                        kind: TokenKind::Error(c.to_string()),
+                        span: Span {
+                            offset: self.cursor,
+                            length: c.len_utf8(),
+                        },
+                    };
+
+                    self.diagnostics.push(Diagnostic::report_error(
+                        format!("Unexpected character `{}`", c),
+                        Span {
+                            offset: self.cursor,
+                            length: c.len_utf8(),
+                        },
+                    ));
+                    self.cursor += 1;
+
+                    return Some(error);
+                }
             },
             None => return None,
         };

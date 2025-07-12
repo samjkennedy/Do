@@ -1,21 +1,20 @@
+use anyhow::{Context, Result, anyhow};
 use interpreter::Interpreter;
 use lexer::{Lexer, Token};
 use parser::{Op, Parser};
-use typechecker::TypeChecker;
 use std::{env, fs};
-use anyhow::{Context, Result};
+use typechecker::TypeChecker;
 
+mod diagnostic;
+mod interpreter;
 mod lexer;
 mod parser;
 mod typechecker;
-mod interpreter;
 
-fn main() -> Result<()>  {
+fn main() -> Result<()> {
     let mut args = env::args().skip(1).peekable();
 
-    let input_path = args
-        .next()
-        .context("Usage: do <input>.do")?;
+    let input_path = args.next().context("Usage: do <input>.do")?;
 
     let input = fs::read_to_string(&input_path)
         .with_context(|| format!("Failed to read input file `{}`", input_path))?;
@@ -26,6 +25,13 @@ fn main() -> Result<()>  {
     while let Some(token) = lexer.next() {
         // println!("{:?}", token);
         tokens.push(token);
+    }
+
+    if !lexer.diagnostics.is_empty() {
+        for diagnostic in lexer.diagnostics {
+            diagnostic.display_diagnostic(&input_path);
+        }
+        return Err(anyhow!("Failed to tokenize input"));
     }
 
     let mut parser = Parser::new(tokens);
