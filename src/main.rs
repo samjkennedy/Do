@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use interpreter::Interpreter;
 use lexer::{Lexer, Token};
 use parser::{Op, Parser};
@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let input = fs::read_to_string(&input_path)
         .with_context(|| format!("Failed to read input file `{}`", input_path))?;
 
-    let mut lexer = Lexer::new(input);
+    let mut lexer = Lexer::new(input.clone()); //TODO: borrow input in the lexer, needs lifetimes
 
     let mut tokens: Vec<Token> = vec![];
     while let Some(token) = lexer.next() {
@@ -29,9 +29,9 @@ fn main() -> Result<()> {
 
     if !lexer.diagnostics.is_empty() {
         for diagnostic in lexer.diagnostics {
-            diagnostic.display_diagnostic(&input_path);
+            diagnostic.display_diagnostic(&input_path, &input);
         }
-        return Err(anyhow!("Failed to tokenize input"));
+        return Ok(());
     }
 
     let mut parser = Parser::new(tokens);
@@ -43,9 +43,9 @@ fn main() -> Result<()> {
 
     if !parser.diagnostics.is_empty() {
         for diagnostic in parser.diagnostics {
-            diagnostic.display_diagnostic(&input_path);
+            diagnostic.display_diagnostic(&input_path, &input);
         }
-        return Err(anyhow!("Failed to parse input"));
+        return Ok(());
     }
 
     let mut type_checker = TypeChecker::new();
@@ -53,9 +53,9 @@ fn main() -> Result<()> {
 
     if !type_checker.diagnostics.is_empty() {
         for diagnostic in type_checker.diagnostics {
-            diagnostic.display_diagnostic(&input_path);
+            diagnostic.display_diagnostic(&input_path, &input);
         }
-        return Err(anyhow!("Failed to type check input"));
+        return Ok(());
     }
 
     let mut interpreter = Interpreter::new();

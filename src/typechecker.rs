@@ -1,4 +1,5 @@
 use crate::diagnostic::Diagnostic;
+use crate::lexer::Span;
 use crate::parser::{Op, OpKind};
 use std::cmp::PartialEq;
 use std::fmt::{Display, Formatter};
@@ -21,7 +22,7 @@ impl Display for TypeKind {
 }
 
 pub struct TypeChecker {
-    type_stack: Vec<TypeKind>,
+    type_stack: Vec<(TypeKind, Span)>,
     pub diagnostics: Vec<Diagnostic>,
     erasures: Vec<TypeKind>,
     next_generic_index: usize,
@@ -43,7 +44,7 @@ impl TypeChecker {
 
             for input in ins {
                 match self.type_stack.pop() {
-                    Some(type_kind) => match input {
+                    Some((type_kind, _span)) => match input {
                         //TODO fix the clone
                         TypeKind::Generic(index) => match self.erasures.clone().get(index) {
                             Some(erased) => self.expect_type(op, &type_kind, erased),
@@ -61,12 +62,22 @@ impl TypeChecker {
             for output in outs {
                 match output {
                     TypeKind::Generic(index) => match self.erasures.get(index) {
-                        Some(erased) => self.type_stack.push(erased.clone()),
-                        None => self.type_stack.push(output),
+                        Some(erased) => self.type_stack.push((erased.clone(), op.span)),
+                        None => self.type_stack.push((output, op.span)),
                     },
-                    _ => self.type_stack.push(output),
+                    _ => self.type_stack.push((output, op.span)),
                 }
             }
+        }
+
+        for (type_kind, span) in &self.type_stack {
+            self.diagnostics.push(Diagnostic::report_error(
+                format!(
+                    "Type stack must be empty at the end of the program, but got {}",
+                    type_kind
+                ),
+                *span,
+            ))
         }
     }
 
