@@ -44,6 +44,13 @@ fn main() -> Result<()> {
     let mut type_checker = TypeChecker::new();
     type_checker.type_check(&ops);
 
+    if !type_checker.diagnostics.is_empty() {
+        for diagnostic in type_checker.diagnostics {
+            diagnostic.display_diagnostic(&input_path);
+        }
+        return Err(anyhow!("Failed to type check input"));
+    }
+
     let mut interpreter = Interpreter::new();
     interpreter.interpret(&ops);
 

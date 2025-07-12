@@ -1,1 +1,1 @@
-4 + print
+4 5 swap + print

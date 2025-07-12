@@ -14,7 +14,7 @@ pub enum TokenKind {
     Error(String),
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Span {
     pub offset: usize,
     pub length: usize,
