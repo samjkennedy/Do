@@ -1,8 +1,78 @@
 use crate::parser::{Op, OpKind};
+use std::fmt::Display;
+use std::ops::{Add, Div, Mul, Rem, Sub};
 
 #[derive(Debug, Clone)]
 enum Value {
     Int(i64),
+    List(Vec<Value>),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(value) => write!(f, "{}", value),
+            Value::List(values) => write!(
+                f,
+                "[{}]",
+                values
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            ),
+        }
+    }
+}
+
+impl Add for Value {
+    type Output = Value;
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs + rhs),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Sub for Value {
+    type Output = Value;
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs - rhs),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Mul for Value {
+    type Output = Value;
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs * rhs),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Div for Value {
+    type Output = Value;
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs / rhs),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Rem for Value {
+    type Output = Value;
+    fn rem(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(lhs), Value::Int(rhs)) => Value::Int(lhs % rhs),
+            _ => unreachable!(),
+        }
+    }
 }
 
 pub struct Interpreter {
@@ -16,37 +86,47 @@ impl Interpreter {
 
     pub fn interpret(&mut self, ops: &Vec<Op>) {
         for op in ops {
-            match op.kind {
-                OpKind::PushInt(value) => self.stack.push(Value::Int(value)),
+            match &op.kind {
+                OpKind::PushInt(value) => self.stack.push(Value::Int(*value)),
+                OpKind::PushList(ops) => {
+                    let mut values = Vec::new();
+                    for op in ops {
+                        match op.kind {
+                            OpKind::PushInt(value) => values.push(Value::Int(value)),
+                            _ => unreachable!(),
+                        }
+                    }
+                    self.stack.push(Value::List(values));
+                }
                 OpKind::Plus => {
-                    let Value::Int(a) = self.stack.pop().unwrap();
-                    let Value::Int(b) = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Int(a + b));
+                    self.stack.push(a + b);
                 }
                 OpKind::Minus => {
-                    let Value::Int(a) = self.stack.pop().unwrap();
-                    let Value::Int(b) = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Int(a - b));
+                    self.stack.push(a - b);
                 }
                 OpKind::Multiply => {
-                    let Value::Int(a) = self.stack.pop().unwrap();
-                    let Value::Int(b) = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Int(a * b));
+                    self.stack.push(a * b);
                 }
                 OpKind::Divide => {
-                    let Value::Int(a) = self.stack.pop().unwrap();
-                    let Value::Int(b) = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Int(a / b));
+                    self.stack.push(a / b);
                 }
                 OpKind::Modulo => {
-                    let Value::Int(a) = self.stack.pop().unwrap();
-                    let Value::Int(b) = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
 
-                    self.stack.push(Value::Int(a % b));
+                    self.stack.push(a % b);
                 }
                 OpKind::Dup => {
                     let a = self.stack.pop().unwrap();
@@ -60,7 +140,7 @@ impl Interpreter {
                     self.stack.push(b);
                 }
                 OpKind::Print => {
-                    let Value::Int(a) = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
                     println!("{}", a);
                 }
             }
