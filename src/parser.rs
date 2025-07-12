@@ -3,6 +3,7 @@ use crate::lexer::{Span, Token, TokenKind};
 
 #[derive(Debug)]
 pub enum OpKind {
+    PushBool(bool),
     PushInt(i64),
     PushList(Vec<Op>),
     Plus,
@@ -10,8 +11,17 @@ pub enum OpKind {
     Multiply,
     Divide,
     Modulo,
-    Dup,
+    LessThan,
+    LessThanEquals,
+    GreaterThan,
+    GreaterThanEquals,
+    Equals,
+    Not,
+    Over,
+    Pop,
+    Rot,
     Swap,
+    Dup,
     Print,
 }
 
@@ -42,6 +52,10 @@ impl Parser {
         self.cursor += 1;
 
         match token.kind {
+            TokenKind::BoolLiteral(value) => Some(Op {
+                kind: OpKind::PushBool(value),
+                span: token.span,
+            }),
             TokenKind::IntLiteral(value) => Some(Op {
                 kind: OpKind::PushInt(value),
                 span: token.span,
@@ -64,6 +78,30 @@ impl Parser {
             }),
             TokenKind::Percent => Some(Op {
                 kind: OpKind::Modulo,
+                span: token.span,
+            }),
+            TokenKind::OpenAngle => Some(Op {
+                kind: OpKind::LessThan,
+                span: token.span,
+            }),
+            TokenKind::OpenAngleEquals => Some(Op {
+                kind: OpKind::LessThanEquals,
+                span: token.span,
+            }),
+            TokenKind::CloseAngle => Some(Op {
+                kind: OpKind::GreaterThan,
+                span: token.span,
+            }),
+            TokenKind::CloseAngleEquals => Some(Op {
+                kind: OpKind::GreaterThanEquals,
+                span: token.span,
+            }),
+            TokenKind::Equals => Some(Op {
+                kind: OpKind::Equals,
+                span: token.span,
+            }),
+            TokenKind::Bang => Some(Op {
+                kind: OpKind::Not,
                 span: token.span,
             }),
             TokenKind::OpenSquare => {
@@ -111,8 +149,20 @@ impl Parser {
                 kind: OpKind::Dup,
                 span: token.span,
             }),
+            TokenKind::OverKeyword => Some(Op {
+                kind: OpKind::Over,
+                span: token.span,
+            }),
+            TokenKind::PopKeyword => Some(Op {
+                kind: OpKind::Pop,
+                span: token.span,
+            }),
             TokenKind::SwapKeyword => Some(Op {
                 kind: OpKind::Swap,
+                span: token.span,
+            }),
+            TokenKind::RotKeyword => Some(Op {
+                kind: OpKind::Rot,
                 span: token.span,
             }),
             TokenKind::PrintKeyword => Some(Op {
