@@ -255,6 +255,20 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::Foreach => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::List(values) = &self.stack.pop().unwrap() {
+                            for value in values {
+                                self.stack.push(value.clone());
+                                self.interpret(ops);
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
                 OpKind::Map => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {

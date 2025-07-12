@@ -25,7 +25,8 @@ pub enum OpKind {
     Dup,
     Print,
     Filter,
-    Map
+    Foreach,
+    Map,
 }
 
 #[derive(Debug, Clone)]
@@ -212,6 +213,10 @@ impl Parser {
             }),
             TokenKind::FilterKeyword => Some(Op {
                 kind: OpKind::Filter,
+                span: token.span,
+            }),
+            TokenKind::ForeachKeyword => Some(Op {
+                kind: OpKind::Foreach,
                 span: token.span,
             }),
             TokenKind::MapKeyword => Some(Op {
