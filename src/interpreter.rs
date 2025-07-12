@@ -200,6 +200,13 @@ impl Interpreter {
                     self.stack.push(a.clone());
                     self.stack.push(a);
                 }
+                OpKind::Len => {
+                    if let Value::List(values) = self.stack.pop().unwrap() {
+                        self.stack.push(Value::Int(values.len() as i64));
+                    } else {
+                        unreachable!()
+                    }
+                }
                 OpKind::Over => {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
@@ -228,6 +235,13 @@ impl Interpreter {
                 OpKind::Print => {
                     let a = self.stack.pop().unwrap();
                     println!("{}", a);
+                }
+                OpKind::Do => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        self.interpret(ops);
+                    } else {
+                        unreachable!()
+                    }
                 }
                 OpKind::Filter => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {

@@ -259,6 +259,10 @@ impl TypeChecker {
                     vec![TypeKind::Generic(index), TypeKind::Generic(index)],
                 )
             }
+            OpKind::Len => {
+                let index = self.create_generic();
+                (vec![TypeKind::Generic(index)], vec![TypeKind::Int])
+            }
             OpKind::Over => {
                 let a = self.create_generic();
                 let b = self.create_generic();
@@ -306,6 +310,15 @@ impl TypeChecker {
                 let index = self.create_generic();
 
                 (vec![TypeKind::Generic(index)], vec![])
+            }
+            OpKind::Do => {
+                (
+                    vec![TypeKind::Block {
+                        ins: vec![], //TODO: Do should accept varargs
+                        outs: vec![],
+                    }],
+                    vec![],
+                )
             }
             OpKind::Filter => {
                 let a = self.create_generic();

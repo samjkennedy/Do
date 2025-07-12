@@ -20,11 +20,13 @@ pub enum TokenKind {
     OpenSquare,
     CloseSquare,
     DupKeyword,
+    LenKeyword,
     OverKeyword,
     PopKeyword,
     RotKeyword,
     SwapKeyword,
     PrintKeyword,
+    DoKeyword,
     FilterKeyword,
     FoldKeyword,
     ForeachKeyword,
@@ -249,6 +251,10 @@ impl Lexer {
                 kind: TokenKind::BoolLiteral(false),
                 span: Span { offset, length },
             },
+            "do" => Token {
+                kind: TokenKind::DoKeyword,
+                span: Span { offset, length },
+            },
             "filter" => Token {
                 kind: TokenKind::FilterKeyword,
                 span: Span { offset, length },
@@ -259,6 +265,10 @@ impl Lexer {
             },
             "foreach" => Token {
                 kind: TokenKind::ForeachKeyword,
+                span: Span { offset, length },
+            },
+            "len" => Token {
+                kind: TokenKind::LenKeyword,
                 span: Span { offset, length },
             },
             "map" => Token {

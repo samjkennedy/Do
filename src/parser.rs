@@ -24,9 +24,11 @@ pub enum OpKind {
     Swap,
     Dup,
     Print,
+    Do,
     Filter,
     Fold,
     Foreach,
+    Len,
     Map,
 }
 
@@ -212,6 +214,10 @@ impl Parser {
                 kind: OpKind::Print,
                 span: token.span,
             }),
+            TokenKind::DoKeyword => Some(Op {
+                kind: OpKind::Do,
+                span: token.span,
+            }),
             TokenKind::FilterKeyword => Some(Op {
                 kind: OpKind::Filter,
                 span: token.span,
@@ -222,6 +228,10 @@ impl Parser {
             }),
             TokenKind::ForeachKeyword => Some(Op {
                 kind: OpKind::Foreach,
+                span: token.span,
+            }),
+            TokenKind::LenKeyword => Some(Op {
+                kind: OpKind::Len,
                 span: token.span,
             }),
             TokenKind::MapKeyword => Some(Op {
