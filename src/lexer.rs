@@ -8,6 +8,8 @@ pub enum TokenKind {
     Star,
     Slash,
     Percent,
+    OpenSquare,
+    CloseSquare,
     DupKeyword,
     SwapKeyword,
     PrintKeyword,
@@ -18,6 +20,15 @@ pub enum TokenKind {
 pub struct Span {
     pub offset: usize,
     pub length: usize,
+}
+
+impl Span {
+    pub fn from_to(start: Span, end: Span) -> Self {
+        Span {
+            offset: start.offset,
+            length: end.offset - start.offset + end.length,
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -51,6 +62,8 @@ impl Lexer {
                 '*' => self.lex_token(c, TokenKind::Star),
                 '/' => self.lex_token(c, TokenKind::Slash),
                 '%' => self.lex_token(c, TokenKind::Percent),
+                '[' => self.lex_token(c, TokenKind::OpenSquare),
+                ']' => self.lex_token(c, TokenKind::CloseSquare),
                 x if x.is_ascii_digit() => self.lex_number(),
                 x if x.is_alphabetic() || x == '_' => self.lex_keyword(),
                 _ => {

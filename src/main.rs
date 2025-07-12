@@ -41,6 +41,13 @@ fn main() -> Result<()> {
         ops.push(op);
     }
 
+    if !parser.diagnostics.is_empty() {
+        for diagnostic in parser.diagnostics {
+            diagnostic.display_diagnostic(&input_path);
+        }
+        return Err(anyhow!("Failed to parse input"));
+    }
+
     let mut type_checker = TypeChecker::new();
     type_checker.type_check(&ops);
 
