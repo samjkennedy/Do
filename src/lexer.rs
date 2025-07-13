@@ -17,6 +17,8 @@ pub enum TokenKind {
     CloseAngleEquals,
     Equals,
     Bang,
+    AndKeyword,
+    OrKeyword,
     OpenSquare,
     CloseSquare,
     DupKeyword,
@@ -249,6 +251,14 @@ impl Lexer {
             },
             "false" => Token {
                 kind: TokenKind::BoolLiteral(false),
+                span: Span { offset, length },
+            },
+            "and" => Token {
+                kind: TokenKind::AndKeyword,
+                span: Span { offset, length },
+            },
+            "or" => Token {
+                kind: TokenKind::OrKeyword,
                 span: Span { offset, length },
             },
             "do" => Token {

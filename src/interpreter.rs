@@ -117,9 +117,17 @@ impl Interpreter {
                 OpKind::PushList(ops) => {
                     let mut values = Vec::new();
                     for op in ops {
-                        match op.kind {
-                            OpKind::PushInt(value) => values.push(Value::Int(value)),
-                            OpKind::PushBool(value) => values.push(Value::Bool(value)),
+                        match &op.kind {
+                            OpKind::PushInt(value) => values.push(Value::Int(*value)),
+                            OpKind::PushBool(value) => values.push(Value::Bool(*value)),
+                            OpKind::PushList(elements) => {
+                                let mut sub_interpreter = Interpreter::new();
+                                sub_interpreter.interpret(elements);
+                                values.push(Value::List(sub_interpreter.stack));
+                            }
+                            OpKind::PushBlock(ops) => {
+                                values.push(Value::Block(ops.clone()));
+                            }
                             _ => unreachable!(),
                         }
                     }
@@ -195,6 +203,28 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::And => {
+                    if let Value::Bool(a) = self.stack.pop().unwrap() {
+                        if let Value::Bool(b) = self.stack.pop().unwrap() {
+                            self.stack.push(Value::Bool(a && b));
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Or => {
+                    if let Value::Bool(a) = self.stack.pop().unwrap() {
+                        if let Value::Bool(b) = self.stack.pop().unwrap() {
+                            self.stack.push(Value::Bool(a || b));
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
                 OpKind::Dup => {
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a.clone());
@@ -237,10 +267,11 @@ impl Interpreter {
                     println!("{}", a);
                 }
                 OpKind::Do => {
-                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                    let value = self.stack.pop().unwrap();
+                    if let Value::Block(ops) = &value {
                         self.interpret(ops);
                     } else {
-                        unreachable!()
+                        unreachable!("tried to call `do` on {:?}", value)
                     }
                 }
                 OpKind::Filter => {

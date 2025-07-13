@@ -161,11 +161,34 @@ impl TypeChecker {
                 let mut element_type: Option<TypeKind> = None;
                 for op in ops {
                     let (ins, outs) = self.get_signature(&op.kind);
-                    if !ins.is_empty() {
-                        unreachable!()
-                    }
-                    if outs.len() != 1 {
-                        unreachable!()
+                    if !ins.is_empty() || outs.len() != 1 {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            format!(
+                                "List elements must have the signature [ -- <a>], got [{} -- {}]",
+                                ins.iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(" "),
+                                outs.iter()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<String>>()
+                                    .join(" ")
+                            ),
+                            op.span,
+                        ));
+                        //Return what we know just to keep parsing
+                        match element_type {
+                            None => {
+                                let index = self.create_generic();
+                                return (
+                                    vec![],
+                                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                                );
+                            }
+                            Some(type_kind) => {
+                                return (vec![], vec![TypeKind::List(Box::new(type_kind))]);
+                            }
+                        }
                     }
                     let out = outs.first().unwrap();
                     match &element_type {
@@ -252,6 +275,8 @@ impl TypeChecker {
                 )
             }
             OpKind::Not => (vec![TypeKind::Bool], vec![TypeKind::Bool]),
+            OpKind::And => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
+            OpKind::Or => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
             OpKind::Dup => {
                 let index = self.create_generic();
                 (

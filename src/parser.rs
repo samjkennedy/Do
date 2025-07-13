@@ -18,6 +18,8 @@ pub enum OpKind {
     GreaterThanEquals,
     Equals,
     Not,
+    And,
+    Or,
     Over,
     Pop,
     Rot,
@@ -111,6 +113,14 @@ impl Parser {
                 kind: OpKind::Not,
                 span: token.span,
             }),
+            TokenKind::AndKeyword => Some(Op {
+                kind: OpKind::And,
+                span: token.span,
+            }),
+            TokenKind::OrKeyword => Some(Op {
+                kind: OpKind::Or,
+                span: token.span,
+            }),
             TokenKind::OpenParenthesis => {
                 let mut ops = Vec::new();
 
@@ -147,41 +157,32 @@ impl Parser {
                 None
             }
             TokenKind::OpenSquare => {
-                let mut ops = Vec::new();
-                loop {
-                    match self.tokens.get(self.cursor) {
-                        Some(next) => {
-                            self.cursor += 1;
-                            match next.kind {
-                                TokenKind::CloseSquare => {
-                                    return Some(Op {
-                                        kind: OpKind::PushList(ops),
-                                        span: Span::from_to(token.span, next.span),
-                                    });
-                                }
-                                TokenKind::IntLiteral(value) => ops.push(Op {
-                                    kind: OpKind::PushInt(value),
-                                    span: token.span,
-                                }),
-                                TokenKind::BoolLiteral(value) => ops.push(Op {
-                                    kind: OpKind::PushBool(value),
-                                    span: token.span,
-                                }),
-                                _ => self.diagnostics.push(Diagnostic::report_error(
-                                    "Only push operations allowed in lists".to_string(),
-                                    next.span,
-                                )),
-                            }
-                        }
-                        None => {
-                            self.diagnostics.push(Diagnostic::report_error(
-                                "List missing closing ']'".to_string(),
-                                token.span,
-                            ));
-                            return None;
-                        }
-                    }
+                let mut elements = Vec::new();
+
+                while self.cursor < self.tokens.len()
+                    && self.tokens[self.cursor].kind != TokenKind::CloseSquare
+                {
+                    elements.push(self.parse_op()?);
                 }
+
+                if self.cursor >= self.tokens.len() {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        "List missing closing ']'".to_string(),
+                        Span::from_to(
+                            token.span,
+                            elements.last().map(|op| op.span).unwrap_or(token.span),
+                        ),
+                    ));
+                    return None;
+                }
+
+                let close_square = self.tokens[self.cursor].clone();
+                self.cursor += 1; //skip closing paren
+
+                Some(Op {
+                    kind: OpKind::PushList(elements),
+                    span: Span::from_to(token.span, close_square.span),
+                })
             }
             TokenKind::CloseSquare => {
                 self.diagnostics.push(Diagnostic::report_error(
