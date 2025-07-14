@@ -59,7 +59,7 @@ impl TypeChecker {
     pub fn type_check(&mut self, ops: &Vec<Op>) {
         for op in ops {
             // println!("op: {:?}", op.kind);
-            let (ins, outs) = self.get_signature(&op.kind);
+            let (ins, outs) = self.get_signature(&op.kind, op.span);
 
             // println!("  ins: {:?}, outs: {:?}", ins, outs);
 
@@ -257,14 +257,14 @@ impl TypeChecker {
         self.erasures[*index] = erased;
     }
 
-    fn get_signature(&mut self, op_kind: &OpKind) -> (Vec<TypeKind>, Vec<TypeKind>) {
+    fn get_signature(&mut self, op_kind: &OpKind, span: Span) -> (Vec<TypeKind>, Vec<TypeKind>) {
         match op_kind {
             OpKind::PushBool(_) => (vec![], vec![TypeKind::Bool]),
             OpKind::PushInt(_) => (vec![], vec![TypeKind::Int]),
             OpKind::PushList(ops) => {
                 let mut element_type: Option<TypeKind> = None;
                 for op in ops {
-                    let (ins, outs) = self.get_signature(&op.kind);
+                    let (ins, outs) = self.get_signature(&op.kind, op.span);
                     if !ins.is_empty() || outs.len() != 1 {
                         self.diagnostics.push(Diagnostic::report_error(
                             format!(
@@ -310,71 +310,8 @@ impl TypeChecker {
                 }
             }
             OpKind::PushBlock(ops) => {
-                let mut ins: Vec<TypeKind> = Vec::new();
-                let mut outs: Vec<TypeKind> = Vec::new();
-
-                for op in ops {
-                    let (op_ins, op_outs) = self.get_signature(&op.kind);
-
-                    // println!("  op: {:?}, op_ins: {:?}, op_outs: {:?}", op, op_ins, op_outs);
-
-                    for op_in in op_ins {
-                        match outs.pop() {
-                            Some(out) => self.expect_type(&out, &op_in, op.span),
-                            None => ins.push(op_in),
-                        }
-                    }
-
-                    for op_out in op_outs {
-                        outs.push(op_out);
-                    }
-                }
-
-                let mut erased_ins = Vec::new();
-                for block_in in ins {
-                    match block_in {
-                        TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
-                            Some(type_kind) => erased_ins.push(type_kind.clone()),
-                            None => erased_ins.push(block_in),
-                        },
-                        //TODO: this is going to need recursion
-                        TypeKind::List(element_type) => match *element_type {
-                            TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
-                                Some(type_kind) => erased_ins.push(type_kind.clone()),
-                                None => erased_ins.push(*element_type),
-                            },
-                            _ => erased_ins.push(*element_type),
-                        },
-                        _ => erased_ins.push(block_in),
-                    }
-                }
-
-                let mut erased_outs = Vec::new();
-                for block_out in outs {
-                    match block_out {
-                        TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
-                            Some(type_kind) => erased_outs.push(type_kind.clone()),
-                            None => erased_outs.push(block_out),
-                        },
-                        //TODO: this is going to need recursion
-                        TypeKind::List(element_type) => match *element_type {
-                            TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
-                                Some(type_kind) => erased_outs.push(type_kind.clone()),
-                                None => erased_outs.push(*element_type),
-                            },
-                            _ => erased_outs.push(*element_type),
-                        },
-                        _ => erased_outs.push(block_out),
-                    }
-                }
-
-                (
-                    vec![],
-                    vec![TypeKind::Block {
-                        ins: erased_ins,
-                        outs: erased_outs,
-                    }],
-                )
+                let (ins, outs) = self.get_block_signature(ops);
+                (vec![], vec![TypeKind::Block { ins, outs }])
             }
             OpKind::Plus | OpKind::Minus | OpKind::Multiply | OpKind::Divide | OpKind::Modulo => {
                 (vec![TypeKind::Int, TypeKind::Int], vec![TypeKind::Int])
@@ -547,5 +484,68 @@ impl TypeChecker {
                 (vec![], vec![])
             }
         }
+    fn get_block_signature(&mut self, ops: &Vec<Op>) -> (Vec<TypeKind>, Vec<TypeKind>) {
+        let mut ins: Vec<TypeKind> = Vec::new();
+        let mut outs: Vec<TypeKind> = Vec::new();
+
+        for op in ops {
+            let (op_ins, op_outs) = self.get_signature(&op.kind, op.span);
+
+            // println!("  op: {:?}, op_ins: {:?}, op_outs: {:?}", op, op_ins, op_outs);
+
+            for op_in in op_ins {
+                match outs.pop() {
+                    Some(out) => self.expect_type(&out, &op_in, op.span),
+                    None => ins.push(op_in),
+                }
+            }
+
+            for op_out in op_outs {
+                outs.push(op_out);
+            }
+        }
+
+        let mut erased_ins = Vec::new();
+        for block_in in ins {
+            match block_in {
+                TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
+                    Some(type_kind) => erased_ins.push(type_kind.clone()),
+                    None => erased_ins.push(block_in),
+                },
+                //TODO: this is going to need recursion
+                TypeKind::List(element_type) => match *element_type {
+                    TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
+                        Some(type_kind) => {
+                            erased_ins.push(TypeKind::List(Box::new(type_kind.clone())))
+                        }
+                        None => erased_ins.push(TypeKind::List(Box::new(*element_type))),
+                    },
+                    _ => erased_ins.push(*element_type),
+                },
+                _ => erased_ins.push(block_in),
+            }
+        }
+
+        let mut erased_outs = Vec::new();
+        for block_out in outs {
+            match block_out {
+                TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
+                    Some(type_kind) => erased_outs.push(type_kind.clone()),
+                    None => erased_outs.push(block_out),
+                },
+                //TODO: this is going to need recursion
+                TypeKind::List(element_type) => match *element_type {
+                    TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
+                        Some(type_kind) => {
+                            erased_outs.push(TypeKind::List(Box::new(type_kind.clone())))
+                        }
+                        None => erased_outs.push(TypeKind::List(Box::new(*element_type))),
+                    },
+                    _ => erased_outs.push(*element_type),
+                },
+                _ => erased_outs.push(block_out),
+            }
+        }
+        (erased_ins, erased_outs)
     }
 }
