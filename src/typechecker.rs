@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
-enum TypeKind {
+pub enum TypeKind {
     Bool,
     Int,
     List(Box<TypeKind>),
@@ -40,8 +40,10 @@ impl Display for TypeKind {
     }
 }
 
+#[derive(Clone)]
 pub struct TypeChecker {
-    type_stack: Vec<(TypeKind, Span)>,
+    fail_on_non_empty_stack: bool,
+    pub type_stack: Vec<(TypeKind, Span)>,
     pub diagnostics: Vec<Diagnostic>,
     erasures: Vec<Option<TypeKind>>,
     next_generic_index: usize,
@@ -49,8 +51,9 @@ pub struct TypeChecker {
 }
 
 impl TypeChecker {
-    pub fn new() -> TypeChecker {
+    pub fn new(fail_on_non_empty_stack: bool) -> TypeChecker {
         TypeChecker {
+            fail_on_non_empty_stack,
             type_stack: Vec::new(),
             diagnostics: Vec::new(),
             erasures: Vec::new(),
@@ -68,8 +71,7 @@ impl TypeChecker {
 
             for input in ins {
                 match self.type_stack.pop() {
-                    //TODO: report the span of where the type was introduced
-                    Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
+                    Some((type_kind, span)) => self.expect_type(&type_kind, &input, op.span),
                     None => self.diagnostics.push(Diagnostic::report_error(
                         format!("Expected {} but stack was empty", input),
                         op.span,
@@ -82,14 +84,16 @@ impl TypeChecker {
             }
         }
 
-        for (type_kind, span) in &self.type_stack {
-            self.diagnostics.push(Diagnostic::report_error(
-                format!(
-                    "Type stack must be empty at the end of the program, but got {}",
-                    type_kind
-                ),
-                *span,
-            ))
+        if self.fail_on_non_empty_stack {
+            for (type_kind, span) in &self.type_stack {
+                self.diagnostics.push(Diagnostic::report_error(
+                    format!(
+                        "Type stack must be empty at the end of the program, but got {}",
+                        type_kind
+                    ),
+                    *span,
+                ))
+            }
         }
     }
 
