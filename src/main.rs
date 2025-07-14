@@ -23,7 +23,6 @@ fn main() -> Result<()> {
 
     let mut tokens: Vec<Token> = vec![];
     while let Some(token) = lexer.next() {
-        // println!("{:?}", token);
         tokens.push(token);
     }
 

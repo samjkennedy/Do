@@ -34,7 +34,7 @@ impl Display for TypeKind {
                     .collect::<Vec<_>>()
                     .join(" "),
             ),
-            TypeKind::Generic(_) => write!(f, "<?>"),
+            TypeKind::Generic(index) => write!(f, "<{}>", index),
         }
     }
 }
@@ -42,7 +42,7 @@ impl Display for TypeKind {
 pub struct TypeChecker {
     type_stack: Vec<(TypeKind, Span)>,
     pub diagnostics: Vec<Diagnostic>,
-    erasures: Vec<TypeKind>,
+    erasures: Vec<Option<TypeKind>>,
     next_generic_index: usize,
 }
 
@@ -58,12 +58,14 @@ impl TypeChecker {
 
     pub fn type_check(&mut self, ops: &Vec<Op>) {
         for op in ops {
+            // println!("op: {:?}", op.kind);
             let (ins, outs) = self.get_signature(&op.kind);
 
-            // println!("op: {:?}, ins: {:?}, outs: {:?}", op.kind, ins, outs);
+            // println!("  ins: {:?}, outs: {:?}", ins, outs);
 
             for input in ins {
                 match self.type_stack.pop() {
+                    //TODO: report the span of where the type was introduced
                     Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
                     None => self.diagnostics.push(Diagnostic::report_error(
                         format!("Expected {} but stack was empty", input),
@@ -88,7 +90,45 @@ impl TypeChecker {
         }
     }
 
+    fn erase(&self, type_kind: &TypeKind) -> Option<TypeKind> {
+        match type_kind {
+            TypeKind::Generic(index) => match self.erasures.get(*index).unwrap() {
+                Some(erasure) => self.erase(erasure),
+                None => None,
+            },
+            TypeKind::List(element_type) => self
+                .erase(element_type)
+                .map(|erased_element_type| TypeKind::List(Box::new(erased_element_type))),
+            TypeKind::Block { ins, outs } => {
+                let erased_ins = ins
+                    .iter()
+                    .map(|i| self.erase(i).unwrap_or(i.clone()))
+                    .collect();
+                let erased_outs = outs
+                    .iter()
+                    .map(|i| self.erase(i).unwrap_or(i.clone()))
+                    .collect();
+                Some(TypeKind::Block {
+                    ins: erased_ins,
+                    outs: erased_outs,
+                })
+            }
+            _ => Some(type_kind.clone()),
+        }
+    }
+
     fn expect_type(&mut self, actual: &TypeKind, expected: &TypeKind, span: Span) {
+        self.expect_type_inner(actual, expected, actual, expected, span);
+    }
+
+    fn expect_type_inner(
+        &mut self,
+        actual: &TypeKind,
+        expected: &TypeKind,
+        original_actual: &TypeKind,
+        original_expected: &TypeKind,
+        span: Span,
+    ) {
         match (actual, expected) {
             (
                 TypeKind::Block {
@@ -104,32 +144,94 @@ impl TypeChecker {
                     || actual_outs.len() != expected_outs.len()
                 {
                     self.diagnostics.push(Diagnostic::report_error(
-                        format!("Expected {} but got {}", expected, actual),
+                        format!(
+                            "Expected {} but got {}",
+                            self.erase(original_expected).unwrap(),
+                            self.erase(original_actual).unwrap()
+                        ),
                         span,
                     ));
                 }
                 for (actual_in, expected_in) in actual_ins.iter().zip(expected_ins.iter()) {
-                    self.expect_type(actual_in, expected_in, span);
+                    self.expect_type_inner(
+                        actual_in,
+                        expected_in,
+                        original_actual,
+                        original_expected,
+                        span,
+                    );
                 }
                 for (actual_out, expected_out) in actual_outs.iter().zip(expected_outs.iter()) {
-                    self.expect_type(actual_out, expected_out, span);
+                    self.expect_type_inner(
+                        actual_out,
+                        expected_out,
+                        original_actual,
+                        original_expected,
+                        span,
+                    );
                 }
             }
-            (TypeKind::Generic(index), expected) => match self.erasures.clone().get(*index) {
-                None => self.erase_generic(index, expected),
-                Some(type_kind) => self.expect_type(type_kind, expected, span),
-            },
-            (actual, TypeKind::Generic(index)) => match self.erasures.clone().get(*index) {
-                None => self.erase_generic(index, actual),
-                Some(type_kind) => self.expect_type(actual, type_kind, span),
-            },
+            //These generic/list pairings feel like they're patching over a mistake somewhere else...
+            (TypeKind::Generic(index), TypeKind::List(rhs)) => {
+                match self.erasures.get(*index).unwrap().clone() {
+                    None => self.erase_generic(index, expected),
+                    Some(type_kind) => self.expect_type_inner(
+                        &type_kind,
+                        rhs,
+                        original_actual,
+                        original_expected,
+                        span,
+                    ),
+                }
+            }
+            //These generic/list pairings feel like they're patching over a mistake somewhere else...
+            (TypeKind::List(lhs), TypeKind::Generic(index)) => {
+                match self.erasures.get(*index).unwrap().clone() {
+                    None => self.erase_generic(index, expected),
+                    Some(type_kind) => self.expect_type_inner(
+                        lhs,
+                        &type_kind,
+                        original_actual,
+                        original_expected,
+                        span,
+                    ),
+                }
+            }
+            (TypeKind::Generic(index), expected) => {
+                match self.erasures.get(*index).unwrap().clone() {
+                    None => self.erase_generic(index, expected),
+                    Some(type_kind) => self.expect_type_inner(
+                        &type_kind,
+                        expected,
+                        original_actual,
+                        original_expected,
+                        span,
+                    ),
+                }
+            }
+            (actual, TypeKind::Generic(index)) => {
+                match self.erasures.get(*index).unwrap().clone() {
+                    None => self.erase_generic(index, actual),
+                    Some(type_kind) => self.expect_type_inner(
+                        actual,
+                        &type_kind,
+                        original_actual,
+                        original_expected,
+                        span,
+                    ),
+                }
+            }
             (TypeKind::List(lhs), TypeKind::List(rhs)) => {
-                self.expect_type(lhs, rhs, span); //TODO: the recursion removes the info that this is a list
+                self.expect_type_inner(lhs, rhs, original_actual, original_expected, span);
             }
             _ => {
-                if expected != actual {
+                if self.erase(expected) != self.erase(actual) {
                     self.diagnostics.push(Diagnostic::report_error(
-                        format!("Expected {} but got {}", expected, actual),
+                        format!(
+                            "Expected {} but got {}",
+                            self.erase(original_expected).unwrap(),
+                            self.erase(original_actual).unwrap()
+                        ),
                         span,
                     ));
                 }
@@ -141,16 +243,18 @@ impl TypeChecker {
         let generic_index = self.next_generic_index;
         self.next_generic_index += 1;
 
+        //None means an unknown generic for this index
+        self.erasures.push(None);
+
+        assert_eq!(self.erasures.len(), self.next_generic_index);
+
         generic_index
     }
 
     fn erase_generic(&mut self, index: &usize, erasure: &TypeKind) {
-        if index > &self.erasures.len() {
-            //TODO: this might not be right, but it's needed for empty lists
-            self.erasures.push(erasure.clone());
-        } else {
-            self.erasures.insert(*index, erasure.clone());
-        }
+        let erased = self.erase(erasure);
+        // println!("generic: {:?} erased to {:?}", erasure, erased);
+        self.erasures[*index] = erased;
     }
 
     fn get_signature(&mut self, op_kind: &OpKind) -> (Vec<TypeKind>, Vec<TypeKind>) {
@@ -177,18 +281,16 @@ impl TypeChecker {
                             op.span,
                         ));
                         //Return what we know just to keep parsing
-                        match element_type {
+                        return match element_type {
                             None => {
                                 let index = self.create_generic();
-                                return (
+                                (
                                     vec![],
                                     vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                                );
+                                )
                             }
-                            Some(type_kind) => {
-                                return (vec![], vec![TypeKind::List(Box::new(type_kind))]);
-                            }
-                        }
+                            Some(type_kind) => (vec![], vec![TypeKind::List(Box::new(type_kind))]),
+                        };
                     }
                     let out = outs.first().unwrap();
                     match &element_type {
@@ -231,9 +333,17 @@ impl TypeChecker {
                 let mut erased_ins = Vec::new();
                 for block_in in ins {
                     match block_in {
-                        TypeKind::Generic(index) => match self.erasures.clone().get(index) {
+                        TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
                             Some(type_kind) => erased_ins.push(type_kind.clone()),
                             None => erased_ins.push(block_in),
+                        },
+                        //TODO: this is going to need recursion
+                        TypeKind::List(element_type) => match *element_type {
+                            TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
+                                Some(type_kind) => erased_ins.push(type_kind.clone()),
+                                None => erased_ins.push(*element_type),
+                            },
+                            _ => erased_ins.push(*element_type),
                         },
                         _ => erased_ins.push(block_in),
                     }
@@ -242,9 +352,17 @@ impl TypeChecker {
                 let mut erased_outs = Vec::new();
                 for block_out in outs {
                     match block_out {
-                        TypeKind::Generic(index) => match self.erasures.clone().get(index) {
+                        TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
                             Some(type_kind) => erased_outs.push(type_kind.clone()),
                             None => erased_outs.push(block_out),
+                        },
+                        //TODO: this is going to need recursion
+                        TypeKind::List(element_type) => match *element_type {
+                            TypeKind::Generic(index) => match self.erasures.get(index).unwrap() {
+                                Some(type_kind) => erased_outs.push(type_kind.clone()),
+                                None => erased_outs.push(*element_type),
+                            },
+                            _ => erased_outs.push(*element_type),
                         },
                         _ => erased_outs.push(block_out),
                     }
@@ -275,6 +393,13 @@ impl TypeChecker {
                 )
             }
             OpKind::Not => (vec![TypeKind::Bool], vec![TypeKind::Bool]),
+            OpKind::Identity => {
+                let index = self.create_generic();
+                (
+                    vec![TypeKind::Generic(index)],
+                    vec![TypeKind::Generic(index)],
+                )
+            }
             OpKind::And => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
             OpKind::Or => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
             OpKind::Dup => {
@@ -336,6 +461,16 @@ impl TypeChecker {
 
                 (vec![TypeKind::Generic(index)], vec![])
             }
+            OpKind::Concat => {
+                let index = self.create_generic();
+                (
+                    vec![
+                        TypeKind::List(Box::new(TypeKind::Generic(index))),
+                        TypeKind::List(Box::new(TypeKind::Generic(index))),
+                    ],
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                )
+            }
             OpKind::Do => {
                 (
                     vec![TypeKind::Block {
@@ -361,7 +496,6 @@ impl TypeChecker {
             }
             OpKind::Fold => {
                 let a = self.create_generic();
-
                 (
                     vec![
                         TypeKind::Generic(a),
@@ -401,6 +535,16 @@ impl TypeChecker {
                     ],
                     vec![TypeKind::List(Box::new(TypeKind::Generic(b)))],
                 )
+            }
+            OpKind::DumpStack => {
+                for (type_kind, span) in &self.type_stack {
+                    println!(
+                        "{} defined at {:?}",
+                        self.erase(type_kind).unwrap_or(type_kind.clone()),
+                        span
+                    );
+                }
+                (vec![], vec![])
             }
         }
     }

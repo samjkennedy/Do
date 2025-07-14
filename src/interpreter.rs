@@ -225,6 +225,11 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::Identity => {
+                    //Do I need to even evaluate this?
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(a);
+                }
                 OpKind::Dup => {
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a.clone());
@@ -265,6 +270,16 @@ impl Interpreter {
                 OpKind::Print => {
                     let a = self.stack.pop().unwrap();
                     println!("{}", a);
+                }
+                OpKind::Concat => {
+                    if let Value::List(lhs) = &self.stack.pop().unwrap() {
+                        if let Value::List(rhs) = &self.stack.pop().unwrap() {
+                            let mut result = Vec::new();
+                            result.extend(rhs.clone());
+                            result.extend(lhs.clone());
+                            self.stack.push(Value::List(result));
+                        }
+                    }
                 }
                 OpKind::Do => {
                     let value = self.stack.pop().unwrap();
@@ -349,6 +364,7 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::DumpStack => {}
             }
         }
     }

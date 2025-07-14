@@ -1,1 +1,3 @@
-4 5 } print
+[[1] [2]]
+    ((2 % 0 =) map) map
+    print
