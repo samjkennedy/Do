@@ -1,5 +1,6 @@
 use crate::lexer::Span;
 
+#[derive(Clone)]
 pub struct Diagnostic {
     message: String,
     span: Span,
@@ -55,7 +56,7 @@ impl Diagnostic {
             }
 
             // Advance line_start to the beginning of the next line
-            // +2 assumes Windows newlines (\n)
+            // +2 assumes Windows newlines (\r\n)
             line_start = line_end + 2; //TODO: handle newlines more gracefully
         }
 

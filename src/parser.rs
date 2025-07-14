@@ -46,22 +46,28 @@ pub struct Op {
 }
 
 pub struct Parser {
-    tokens: Vec<Token>,
     cursor: usize,
     pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Parser {
+    pub fn new() -> Parser {
         Parser {
-            tokens,
             cursor: 0,
             diagnostics: Vec::new(),
         }
     }
 
-    pub fn parse_op(&mut self) -> Option<Op> {
-        let token = self.tokens.get(self.cursor)?.clone();
+    pub fn parse(&mut self, tokens: &Vec<Token>) -> Vec<Op> {
+        let mut ops: Vec<Op> = vec![];
+        while let Some(op) = self.parse_op(tokens) {
+            ops.push(op);
+        }
+        ops
+    }
+
+    pub fn parse_op(&mut self, tokens: &Vec<Token>) -> Option<Op> {
+        let token = tokens.get(self.cursor)?.clone();
 
         self.cursor += 1;
 
@@ -130,7 +136,7 @@ impl Parser {
                 kind: OpKind::Or,
                 span: token.span,
             }),
-            TokenKind::OpenParenthesis => self.parse_block(&token),
+            TokenKind::OpenParenthesis => self.parse_block(&token, tokens),
             TokenKind::CloseParenthesis => {
                 self.diagnostics.push(Diagnostic::report_error(
                     "unexpected token ')'".to_string(),
@@ -141,13 +147,13 @@ impl Parser {
             TokenKind::OpenSquare => {
                 let mut elements = Vec::new();
 
-                while self.cursor < self.tokens.len()
-                    && self.tokens[self.cursor].kind != TokenKind::CloseSquare
+                while self.cursor < tokens.len()
+                    && tokens[self.cursor].kind != TokenKind::CloseSquare
                 {
-                    elements.push(self.parse_op()?);
+                    elements.push(self.parse_op(tokens)?);
                 }
 
-                if self.cursor >= self.tokens.len() {
+                if self.cursor >= tokens.len() {
                     self.diagnostics.push(Diagnostic::report_error(
                         "List missing closing ']'".to_string(),
                         Span::from_to(
@@ -158,7 +164,7 @@ impl Parser {
                     return None;
                 }
 
-                let close_square = self.tokens[self.cursor].clone();
+                let close_square = tokens[self.cursor].clone();
                 self.cursor += 1; //skip closing paren
 
                 Some(Op {
@@ -230,10 +236,10 @@ impl Parser {
                 span: token.span,
             }),
             TokenKind::FnKeyword => {
-                let identifier = self.expect_identifier(token.span)?;
+                let identifier = self.expect_identifier(tokens, token.span)?;
                 let open_parenthesis =
-                    self.expect_token(&TokenKind::OpenParenthesis, token.span)?;
-                let body = self.parse_block(&open_parenthesis)?;
+                    self.expect_token(&TokenKind::OpenParenthesis, tokens, token.span)?;
+                let body = self.parse_block(&open_parenthesis, tokens)?;
 
                 let span = Span::from_to(identifier.span, body.span);
 
@@ -253,37 +259,37 @@ impl Parser {
         }
     }
 
-    fn parse_block(&mut self, token: &Token) -> Option<Op> {
+    fn parse_block(&mut self, open_paren: &Token, tokens: &Vec<Token>) -> Option<Op> {
         let mut ops = Vec::new();
 
-        while self.cursor < self.tokens.len()
-            && self.tokens[self.cursor].kind != TokenKind::CloseParenthesis
+        while self.cursor < tokens.len()
+            && tokens[self.cursor].kind != TokenKind::CloseParenthesis
         {
-            ops.push(self.parse_op()?);
+            ops.push(self.parse_op(tokens)?);
         }
 
-        if self.cursor >= self.tokens.len() {
+        if self.cursor >= tokens.len() {
             self.diagnostics.push(Diagnostic::report_error(
                 "Block missing closing ')'".to_string(),
                 Span::from_to(
-                    token.span,
-                    ops.last().map(|op| op.span).unwrap_or(token.span),
+                    open_paren.span,
+                    ops.last().map(|op| op.span).unwrap_or(open_paren.span),
                 ),
             ));
             return None;
         }
 
-        let close_paren = self.tokens[self.cursor].clone();
+        let close_paren = tokens[self.cursor].clone();
         self.cursor += 1; //skip closing paren
 
         Some(Op {
             kind: OpKind::PushBlock(ops),
-            span: Span::from_to(token.span, close_paren.span),
+            span: Span::from_to(open_paren.span, close_paren.span),
         })
     }
 
-    fn expect_identifier(&mut self, span: Span) -> Option<Token> {
-        match self.tokens.get(self.cursor) {
+    fn expect_identifier(&mut self, tokens: &Vec<Token>, span: Span) -> Option<Token> {
+        match tokens.get(self.cursor) {
             Some(token) => match &token.kind {
                 TokenKind::Identifier(_) => {
                     self.cursor += 1;
@@ -308,8 +314,8 @@ impl Parser {
             }
         }
     }
-    fn expect_token(&mut self, expected: &TokenKind, span: Span) -> Option<Token> {
-        match self.tokens.get(self.cursor) {
+    fn expect_token(&mut self, expected: &TokenKind, tokens: &Vec<Token>, span: Span) -> Option<Token> {
+        match tokens.get(self.cursor) {
             Some(token) => match &token.kind {
                 kind if kind == expected => {
                     self.cursor += 1;

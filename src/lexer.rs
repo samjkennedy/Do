@@ -63,24 +63,30 @@ pub struct Token {
 }
 
 pub struct Lexer {
-    input: String,
     cursor: usize,
     pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Lexer {
-    pub fn new(input: String) -> Lexer {
+    pub fn new() -> Lexer {
         Lexer {
-            input,
             cursor: 0,
             diagnostics: Vec::new(),
         }
     }
 
-    pub fn next(&mut self) -> Option<Token> {
-        self.skip_whitespace_and_comments();
+    pub fn lex(&mut self, input: &String) -> Vec<Token> {
+        let mut tokens: Vec<Token> = vec![];
+        while let Some(token) = self.next(input) {
+            tokens.push(token);
+        }
+        tokens
+    }
 
-        let token = match self.peek() {
+    fn next(&mut self, input: &String) -> Option<Token> {
+        self.skip_whitespace_and_comments(input);
+
+        let token = match self.peek(input) {
             Some(c) => match c {
                 '+' => self.lex_token(c, TokenKind::Plus),
                 '-' => self.lex_token(c, TokenKind::Minus),
@@ -90,12 +96,14 @@ impl Lexer {
                 '(' => self.lex_token(c, TokenKind::OpenParenthesis),
                 ')' => self.lex_token(c, TokenKind::CloseParenthesis),
                 '<' => self.lex_multichar_token(
+                    input,
                     c,
                     '=',
                     TokenKind::OpenAngleEquals,
                     TokenKind::OpenAngle,
                 ),
                 '>' => self.lex_multichar_token(
+                    input,
                     c,
                     '=',
                     TokenKind::CloseAngleEquals,
@@ -106,8 +114,8 @@ impl Lexer {
                 '.' => self.lex_token(c, TokenKind::Dot),
                 '[' => self.lex_token(c, TokenKind::OpenSquare),
                 ']' => self.lex_token(c, TokenKind::CloseSquare),
-                x if x.is_ascii_digit() => self.lex_number(),
-                x if x.is_alphabetic() || x == '_' || x == '?' => self.lex_keyword(),
+                x if x.is_ascii_digit() => self.lex_number(input),
+                x if x.is_alphabetic() || x == '_' || x == '?' => self.lex_keyword(input),
                 _ => {
                     let error = Token {
                         kind: TokenKind::Error(c.to_string()),
@@ -137,14 +145,15 @@ impl Lexer {
 
     fn lex_multichar_token(
         &mut self,
+        input: &String,
         c: char,
         next: char,
         if_match: TokenKind,
         if_not_match: TokenKind,
     ) -> Token {
-        if self.cursor < self.input.len() {
+        if self.cursor < input.len() {
             self.cursor += 1;
-            return match self.peek() {
+            return match self.peek(input) {
                 Some(c) if c == next => {
                     let token = Token {
                         kind: if_match,
@@ -177,23 +186,23 @@ impl Lexer {
         token
     }
 
-    fn peek(&mut self) -> Option<char> {
-        self.input.chars().nth(self.cursor)
+    fn peek(&mut self, input: &String) -> Option<char> {
+        input.chars().nth(self.cursor)
     }
 
-    fn skip_whitespace_and_comments(&mut self) {
+    fn skip_whitespace_and_comments(&mut self, input: &String) {
         loop {
             let start = self.cursor;
-            self.skip_single_whitespace();
-            self.skip_comment();
+            self.skip_single_whitespace(input);
+            self.skip_comment(input);
             if self.cursor == start {
                 break;
             }
         }
     }
 
-    fn skip_single_whitespace(&mut self) {
-        while let Some(c) = self.peek() {
+    fn skip_single_whitespace(&mut self, input: &String) {
+        while let Some(c) = self.peek(input) {
             if c.is_ascii_whitespace() {
                 self.cursor += 1;
             } else {
@@ -202,12 +211,12 @@ impl Lexer {
         }
     }
 
-    fn skip_comment(&mut self) {
-        if let Some('/') = self.peek() {
+    fn skip_comment(&mut self, input: &String) {
+        if let Some('/') = self.peek(input) {
             self.cursor += 1;
-            if let Some('/') = self.peek() {
+            if let Some('/') = self.peek(input) {
                 self.cursor += 1;
-                while let Some(c) = self.peek() {
+                while let Some(c) = self.peek(input) {
                     self.cursor += 1;
                     if c == '\n' {
                         break;
@@ -219,10 +228,10 @@ impl Lexer {
         }
     }
 
-    fn lex_number(&mut self) -> Token {
+    fn lex_number(&mut self, input: &String) -> Token {
         let offset = self.cursor;
 
-        while let Some(c) = self.peek() {
+        while let Some(c) = self.peek(input) {
             if c.is_ascii_digit() {
                 self.cursor += 1;
             } else {
@@ -230,7 +239,7 @@ impl Lexer {
             }
         }
 
-        let number = &self.input[offset..self.cursor].parse::<i64>().unwrap();
+        let number = &input[offset..self.cursor].parse::<i64>().unwrap();
         Token {
             kind: TokenKind::IntLiteral(*number),
             span: Span {
@@ -240,10 +249,10 @@ impl Lexer {
         }
     }
 
-    fn lex_keyword(&mut self) -> Token {
+    fn lex_keyword(&mut self, input: &String) -> Token {
         let offset = self.cursor;
 
-        while let Some(c) = self.peek() {
+        while let Some(c) = self.peek(input) {
             if c.is_alphanumeric() || c == '_' || c == '?' {
                 self.cursor += 1;
             } else {
@@ -251,7 +260,7 @@ impl Lexer {
             }
         }
 
-        let keyword = &self.input[offset..self.cursor];
+        let keyword = &input[offset..self.cursor];
         let length = self.cursor - offset;
 
         match keyword {
