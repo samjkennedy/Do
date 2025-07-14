@@ -20,6 +20,7 @@ pub enum OpKind {
     Not,
     And,
     Or,
+    Identity,
     Over,
     Pop,
     Rot,
@@ -113,6 +114,10 @@ impl Parser {
             }),
             TokenKind::Bang => Some(Op {
                 kind: OpKind::Not,
+                span: token.span,
+            }),
+            TokenKind::Dot => Some(Op {
+                kind: OpKind::Identity,
                 span: token.span,
             }),
             TokenKind::AndKeyword => Some(Op {

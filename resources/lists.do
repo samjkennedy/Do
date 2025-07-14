@@ -11,7 +11,7 @@
 [[2 4] [5 6 7 8] [12 10]]
     ((2 % 0 =) map) map
     ((and) true fold) map
-    (true =) filter len
+    (.) filter len
     print
 
 [[1 2] [3 4] [5 6]]

@@ -393,6 +393,13 @@ impl TypeChecker {
                 )
             }
             OpKind::Not => (vec![TypeKind::Bool], vec![TypeKind::Bool]),
+            OpKind::Identity => {
+                let index = self.create_generic();
+                (
+                    vec![TypeKind::Generic(index)],
+                    vec![TypeKind::Generic(index)],
+                )
+            }
             OpKind::And => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
             OpKind::Or => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
             OpKind::Dup => {

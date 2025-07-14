@@ -225,6 +225,11 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::Identity => {
+                    //Do I need to even evaluate this?
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(a);
+                }
                 OpKind::Dup => {
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a.clone());
