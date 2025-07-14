@@ -2,6 +2,7 @@ use crate::diagnostic::Diagnostic;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
+    Identifier(String),
     IntLiteral(i64),
     BoolLiteral(bool),
     Plus,
@@ -36,6 +37,7 @@ pub enum TokenKind {
     ForeachKeyword,
     MapKeyword,
     TripleQuestion,
+    FnKeyword,
     Error(String),
 }
 
@@ -76,7 +78,7 @@ impl Lexer {
     }
 
     pub fn next(&mut self) -> Option<Token> {
-        self.skip_whitespace();
+        self.skip_whitespace_and_comments();
 
         let token = match self.peek() {
             Some(c) => match c {
@@ -179,12 +181,40 @@ impl Lexer {
         self.input.chars().nth(self.cursor)
     }
 
-    fn skip_whitespace(&mut self) {
+    fn skip_whitespace_and_comments(&mut self) {
+        loop {
+            let start = self.cursor;
+            self.skip_single_whitespace();
+            self.skip_comment();
+            if self.cursor == start {
+                break;
+            }
+        }
+    }
+
+    fn skip_single_whitespace(&mut self) {
         while let Some(c) = self.peek() {
             if c.is_ascii_whitespace() {
                 self.cursor += 1;
             } else {
                 break;
+            }
+        }
+    }
+
+    fn skip_comment(&mut self) {
+        if let Some('/') = self.peek() {
+            self.cursor += 1;
+            if let Some('/') = self.peek() {
+                self.cursor += 1;
+                while let Some(c) = self.peek() {
+                    self.cursor += 1;
+                    if c == '\n' {
+                        break;
+                    }
+                }
+            } else {
+                self.cursor -= 1; //backpedal
             }
         }
     }
@@ -297,17 +327,14 @@ impl Lexer {
                 kind: TokenKind::TripleQuestion,
                 span: Span { offset, length },
             },
-            &_ => {
-                let error = Token {
-                    kind: TokenKind::Error(keyword.to_string()),
-                    span: Span { offset, length },
-                };
-                self.diagnostics.push(Diagnostic::report_error(
-                    format!("Unexpected keyword `{}`", keyword),
-                    error.span,
-                ));
-                error
-            }
+            "fn" => Token {
+                kind: TokenKind::FnKeyword,
+                span: Span { offset, length },
+            },
+            &_ => Token {
+                kind: TokenKind::Identifier(keyword.to_string()),
+                span: Span { offset, length },
+            },
         }
     }
 }
