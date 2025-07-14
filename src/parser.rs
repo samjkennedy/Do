@@ -26,12 +26,14 @@ pub enum OpKind {
     Swap,
     Dup,
     Print,
+    Concat,
     Do,
     Filter,
     Fold,
     Foreach,
     Len,
     Map,
+    DumpStack,
 }
 
 #[derive(Debug, Clone)]
@@ -215,6 +217,10 @@ impl Parser {
                 kind: OpKind::Print,
                 span: token.span,
             }),
+            TokenKind::ConcatKeyword => Some(Op {
+                kind: OpKind::Concat,
+                span: token.span,
+            }),
             TokenKind::DoKeyword => Some(Op {
                 kind: OpKind::Do,
                 span: token.span,
@@ -237,6 +243,10 @@ impl Parser {
             }),
             TokenKind::MapKeyword => Some(Op {
                 kind: OpKind::Map,
+                span: token.span,
+            }),
+            TokenKind::TripleQuestion => Some(Op {
+                kind: OpKind::DumpStack,
                 span: token.span,
             }),
             TokenKind::Error(_) => None,

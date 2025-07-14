@@ -28,11 +28,13 @@ pub enum TokenKind {
     RotKeyword,
     SwapKeyword,
     PrintKeyword,
+    ConcatKeyword,
     DoKeyword,
     FilterKeyword,
     FoldKeyword,
     ForeachKeyword,
     MapKeyword,
+    TripleQuestion,
     Error(String),
 }
 
@@ -101,7 +103,7 @@ impl Lexer {
                 '[' => self.lex_token(c, TokenKind::OpenSquare),
                 ']' => self.lex_token(c, TokenKind::CloseSquare),
                 x if x.is_ascii_digit() => self.lex_number(),
-                x if x.is_alphabetic() || x == '_' => self.lex_keyword(),
+                x if x.is_alphabetic() || x == '_' || x == '?' => self.lex_keyword(),
                 _ => {
                     let error = Token {
                         kind: TokenKind::Error(c.to_string()),
@@ -210,7 +212,7 @@ impl Lexer {
         let offset = self.cursor;
 
         while let Some(c) = self.peek() {
-            if c.is_alphanumeric() || c == '_' {
+            if c.is_alphanumeric() || c == '_' || c == '?' {
                 self.cursor += 1;
             } else {
                 break;
@@ -261,6 +263,10 @@ impl Lexer {
                 kind: TokenKind::OrKeyword,
                 span: Span { offset, length },
             },
+            "concat" => Token {
+                kind: TokenKind::ConcatKeyword,
+                span: Span { offset, length },
+            },
             "do" => Token {
                 kind: TokenKind::DoKeyword,
                 span: Span { offset, length },
@@ -283,6 +289,10 @@ impl Lexer {
             },
             "map" => Token {
                 kind: TokenKind::MapKeyword,
+                span: Span { offset, length },
+            },
+            "???" => Token {
+                kind: TokenKind::TripleQuestion,
                 span: Span { offset, length },
             },
             &_ => {
