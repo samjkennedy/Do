@@ -1,5 +1,7 @@
+use crate::lexer::TokenKind;
 use crate::parser::{Op, OpKind};
 use std::cmp::{Ordering, PartialOrd};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
@@ -82,6 +84,7 @@ impl Rem for Value {
 
 pub struct Interpreter {
     stack: Vec<Value>,
+    functions: HashMap<String, Vec<Op>>,
 }
 
 impl PartialEq<Self> for Value {
@@ -106,7 +109,16 @@ impl PartialOrd for Value {
 
 impl Interpreter {
     pub fn new() -> Interpreter {
-        Interpreter { stack: Vec::new() }
+        Interpreter {
+            stack: Vec::new(),
+            functions: HashMap::new(),
+        }
+    }
+    pub fn new_sub(functions: HashMap<String, Vec<Op>>) -> Interpreter {
+        Interpreter {
+            stack: Vec::new(),
+            functions,
+        }
     }
 
     pub fn interpret(&mut self, ops: &Vec<Op>) {
@@ -121,7 +133,8 @@ impl Interpreter {
                             OpKind::PushInt(value) => values.push(Value::Int(*value)),
                             OpKind::PushBool(value) => values.push(Value::Bool(*value)),
                             OpKind::PushList(elements) => {
-                                let mut sub_interpreter = Interpreter::new();
+                                let mut sub_interpreter =
+                                    Interpreter::new_sub(self.functions.clone());
                                 sub_interpreter.interpret(elements);
                                 values.push(Value::List(sub_interpreter.stack));
                             }
@@ -292,7 +305,7 @@ impl Interpreter {
                 OpKind::Filter => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {
-                            let mut sub_interpreter = Interpreter::new();
+                            let mut sub_interpreter = Interpreter::new_sub(self.functions.clone());
                             for value in values {
                                 sub_interpreter.stack.push(value.clone());
                                 sub_interpreter.interpret(ops);
@@ -332,7 +345,7 @@ impl Interpreter {
                 OpKind::Map => {
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {
-                            let mut sub_interpreter = Interpreter::new();
+                            let mut sub_interpreter = Interpreter::new_sub(self.functions.clone());
                             for value in values {
                                 sub_interpreter.stack.push(value.clone());
                                 sub_interpreter.interpret(ops);
@@ -349,7 +362,7 @@ impl Interpreter {
                     let mut acc = self.stack.pop().unwrap();
                     if let Value::Block(ops) = &self.stack.pop().unwrap() {
                         if let Value::List(values) = &self.stack.pop().unwrap() {
-                            let mut sub_interpreter = Interpreter::new();
+                            let mut sub_interpreter = Interpreter::new_sub(self.functions.clone());
                             for value in values {
                                 sub_interpreter.stack.push(acc.clone());
                                 sub_interpreter.stack.push(value.clone());
@@ -365,6 +378,21 @@ impl Interpreter {
                     }
                 }
                 OpKind::DumpStack => {}
+                OpKind::DefineFunction { identifier, body } => {
+                    if let TokenKind::Identifier(name) = &identifier.kind {
+                        if let OpKind::PushBlock(ops) = &body.kind {
+                            self.functions.insert(name.clone(), ops.clone());
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Call(name) => {
+                    let ops = self.functions.get(name).unwrap().clone();
+                    self.interpret(&ops);
+                }
             }
         }
     }

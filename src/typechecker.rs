@@ -1,7 +1,8 @@
 use crate::diagnostic::Diagnostic;
-use crate::lexer::Span;
+use crate::lexer::{Span, TokenKind};
 use crate::parser::{Op, OpKind};
 use std::cmp::PartialEq;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +45,7 @@ pub struct TypeChecker {
     pub diagnostics: Vec<Diagnostic>,
     erasures: Vec<Option<TypeKind>>,
     next_generic_index: usize,
+    functions: HashMap<String, (Vec<TypeKind>, Vec<TypeKind>)>,
 }
 
 impl TypeChecker {
@@ -53,6 +55,7 @@ impl TypeChecker {
             diagnostics: Vec::new(),
             erasures: Vec::new(),
             next_generic_index: 0,
+            functions: HashMap::new(),
         }
     }
 
@@ -483,7 +486,36 @@ impl TypeChecker {
                 }
                 (vec![], vec![])
             }
+            OpKind::DefineFunction { identifier, body } => {
+                if let TokenKind::Identifier(name) = &identifier.kind {
+                    if let OpKind::PushBlock(ops) = &body.kind {
+                        let (ins, outs) = self.get_block_signature(ops);
+
+                        self.functions.insert(name.clone(), (ins, outs));
+
+                        (vec![], vec![]) //declaring a function doesn't affect the stack
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+            OpKind::Call(name) => {
+                match self.functions.get(name) {
+                    Some((ins, outs)) => (ins.clone(), outs.clone()),
+                    None => {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            format!("no such function `{}`", name),
+                            span,
+                        ));
+                        (vec![], vec![]) //return nothing to keep going
+                    }
+                }
+            }
         }
+    }
+
     fn get_block_signature(&mut self, ops: &Vec<Op>) -> (Vec<TypeKind>, Vec<TypeKind>) {
         let mut ins: Vec<TypeKind> = Vec::new();
         let mut outs: Vec<TypeKind> = Vec::new();

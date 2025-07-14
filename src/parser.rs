@@ -35,6 +35,8 @@ pub enum OpKind {
     Len,
     Map,
     DumpStack,
+    DefineFunction { identifier: Token, body: Box<Op> },
+    Call(String),
 }
 
 #[derive(Debug, Clone)]
@@ -128,34 +130,7 @@ impl Parser {
                 kind: OpKind::Or,
                 span: token.span,
             }),
-            TokenKind::OpenParenthesis => {
-                let mut ops = Vec::new();
-
-                while self.cursor < self.tokens.len()
-                    && self.tokens[self.cursor].kind != TokenKind::CloseParenthesis
-                {
-                    ops.push(self.parse_op()?);
-                }
-
-                if self.cursor >= self.tokens.len() {
-                    self.diagnostics.push(Diagnostic::report_error(
-                        "Block missing closing ')'".to_string(),
-                        Span::from_to(
-                            token.span,
-                            ops.last().map(|op| op.span).unwrap_or(token.span),
-                        ),
-                    ));
-                    return None;
-                }
-
-                let close_paren = self.tokens[self.cursor].clone();
-                self.cursor += 1; //skip closing paren
-
-                Some(Op {
-                    kind: OpKind::PushBlock(ops),
-                    span: Span::from_to(token.span, close_paren.span),
-                })
-            }
+            TokenKind::OpenParenthesis => self.parse_block(&token),
             TokenKind::CloseParenthesis => {
                 self.diagnostics.push(Diagnostic::report_error(
                     "unexpected token ')'".to_string(),
@@ -254,7 +229,110 @@ impl Parser {
                 kind: OpKind::DumpStack,
                 span: token.span,
             }),
+            TokenKind::FnKeyword => {
+                let identifier = self.expect_identifier(token.span)?;
+                let open_parenthesis =
+                    self.expect_token(&TokenKind::OpenParenthesis, token.span)?;
+                let body = self.parse_block(&open_parenthesis)?;
+
+                let span = Span::from_to(identifier.span, body.span);
+
+                Some(Op {
+                    kind: OpKind::DefineFunction {
+                        identifier,
+                        body: Box::new(body),
+                    },
+                    span,
+                })
+            }
+            TokenKind::Identifier(identifier) => Some(Op {
+                kind: OpKind::Call(identifier),
+                span: token.span,
+            }),
             TokenKind::Error(_) => None,
+        }
+    }
+
+    fn parse_block(&mut self, token: &Token) -> Option<Op> {
+        let mut ops = Vec::new();
+
+        while self.cursor < self.tokens.len()
+            && self.tokens[self.cursor].kind != TokenKind::CloseParenthesis
+        {
+            ops.push(self.parse_op()?);
+        }
+
+        if self.cursor >= self.tokens.len() {
+            self.diagnostics.push(Diagnostic::report_error(
+                "Block missing closing ')'".to_string(),
+                Span::from_to(
+                    token.span,
+                    ops.last().map(|op| op.span).unwrap_or(token.span),
+                ),
+            ));
+            return None;
+        }
+
+        let close_paren = self.tokens[self.cursor].clone();
+        self.cursor += 1; //skip closing paren
+
+        Some(Op {
+            kind: OpKind::PushBlock(ops),
+            span: Span::from_to(token.span, close_paren.span),
+        })
+    }
+
+    fn expect_identifier(&mut self, span: Span) -> Option<Token> {
+        match self.tokens.get(self.cursor) {
+            Some(token) => match &token.kind {
+                TokenKind::Identifier(_) => {
+                    self.cursor += 1;
+                    Some(token.clone())
+                }
+                _ => {
+                    self.cursor += 1;
+                    self.diagnostics.push(Diagnostic::report_error(
+                        //TODO: implement display for tokenkind
+                        format!("Expected identifier but got `{:?}`", token.kind),
+                        span,
+                    ));
+                    None
+                }
+            },
+            None => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "Expected identifier but got nothing".to_string(),
+                    span,
+                ));
+                None
+            }
+        }
+    }
+    fn expect_token(&mut self, expected: &TokenKind, span: Span) -> Option<Token> {
+        match self.tokens.get(self.cursor) {
+            Some(token) => match &token.kind {
+                kind if kind == expected => {
+                    self.cursor += 1;
+                    Some(token.clone())
+                }
+                _ => {
+                    self.cursor += 1;
+                    self.diagnostics.push(Diagnostic::report_error(
+                        //TODO: implement display for tokenkind
+                        format!("Expected '{:?}' but got `{:?}`", expected, token.kind),
+                        span,
+                    ));
+                    None
+                }
+            },
+            None => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    //TODO: implement display for tokenkind
+                    format!("Expected '{:?}' but got nothing", expected),
+                    span,
+                ));
+                None
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ use crate::diagnostic::Diagnostic;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
+    Identifier(String),
     IntLiteral(i64),
     BoolLiteral(bool),
     Plus,
@@ -36,6 +37,7 @@ pub enum TokenKind {
     ForeachKeyword,
     MapKeyword,
     TripleQuestion,
+    FnKeyword,
     Error(String),
 }
 
@@ -325,17 +327,14 @@ impl Lexer {
                 kind: TokenKind::TripleQuestion,
                 span: Span { offset, length },
             },
-            &_ => {
-                let error = Token {
-                    kind: TokenKind::Error(keyword.to_string()),
-                    span: Span { offset, length },
-                };
-                self.diagnostics.push(Diagnostic::report_error(
-                    format!("Unexpected keyword `{}`", keyword),
-                    error.span,
-                ));
-                error
-            }
+            "fn" => Token {
+                kind: TokenKind::FnKeyword,
+                span: Span { offset, length },
+            },
+            &_ => Token {
+                kind: TokenKind::Identifier(keyword.to_string()),
+                span: Span { offset, length },
+            },
         }
     }
 }
