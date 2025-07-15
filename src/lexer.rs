@@ -75,7 +75,7 @@ impl Lexer {
         }
     }
 
-    pub fn lex(&mut self, input: &String) -> Vec<Token> {
+    pub fn lex(&mut self, input: &str) -> Vec<Token> {
         let mut tokens: Vec<Token> = vec![];
         while let Some(token) = self.next(input) {
             tokens.push(token);
@@ -83,7 +83,7 @@ impl Lexer {
         tokens
     }
 
-    fn next(&mut self, input: &String) -> Option<Token> {
+    fn next(&mut self, input: &str) -> Option<Token> {
         self.skip_whitespace_and_comments(input);
 
         let token = match self.peek(input) {
@@ -145,7 +145,7 @@ impl Lexer {
 
     fn lex_multichar_token(
         &mut self,
-        input: &String,
+        input: &str,
         c: char,
         next: char,
         if_match: TokenKind,
@@ -186,11 +186,11 @@ impl Lexer {
         token
     }
 
-    fn peek(&mut self, input: &String) -> Option<char> {
+    fn peek(&mut self, input: &str) -> Option<char> {
         input.chars().nth(self.cursor)
     }
 
-    fn skip_whitespace_and_comments(&mut self, input: &String) {
+    fn skip_whitespace_and_comments(&mut self, input: &str) {
         loop {
             let start = self.cursor;
             self.skip_single_whitespace(input);
@@ -201,7 +201,7 @@ impl Lexer {
         }
     }
 
-    fn skip_single_whitespace(&mut self, input: &String) {
+    fn skip_single_whitespace(&mut self, input: &str) {
         while let Some(c) = self.peek(input) {
             if c.is_ascii_whitespace() {
                 self.cursor += 1;
@@ -211,7 +211,7 @@ impl Lexer {
         }
     }
 
-    fn skip_comment(&mut self, input: &String) {
+    fn skip_comment(&mut self, input: &str) {
         if let Some('/') = self.peek(input) {
             self.cursor += 1;
             if let Some('/') = self.peek(input) {
@@ -228,7 +228,7 @@ impl Lexer {
         }
     }
 
-    fn lex_number(&mut self, input: &String) -> Token {
+    fn lex_number(&mut self, input: &str) -> Token {
         let offset = self.cursor;
 
         while let Some(c) = self.peek(input) {
@@ -249,7 +249,7 @@ impl Lexer {
         }
     }
 
-    fn lex_keyword(&mut self, input: &String) -> Token {
+    fn lex_keyword(&mut self, input: &str) -> Token {
         let offset = self.cursor;
 
         while let Some(c) = self.peek(input) {
