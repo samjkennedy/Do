@@ -71,7 +71,7 @@ impl TypeChecker {
 
             for input in ins {
                 match self.type_stack.pop() {
-                    Some((type_kind, span)) => self.expect_type(&type_kind, &input, op.span),
+                    Some((type_kind, _span)) => self.expect_type(&type_kind, &input, op.span),
                     None => self.diagnostics.push(Diagnostic::report_error(
                         format!("Expected {} but stack was empty", input),
                         op.span,
@@ -387,8 +387,8 @@ impl TypeChecker {
                     ],
                     vec![
                         TypeKind::Generic(b),
-                        TypeKind::Generic(c),
                         TypeKind::Generic(a),
+                        TypeKind::Generic(c),
                     ],
                 )
             }

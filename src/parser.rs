@@ -1,5 +1,6 @@
 use crate::diagnostic::Diagnostic;
 use crate::lexer::{Span, Token, TokenKind};
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub enum OpKind {
@@ -45,6 +46,71 @@ pub struct Op {
     pub span: Span,
 }
 
+impl Display for Op {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            OpKind::PushBool(value) => write!(f, "{}", value),
+            OpKind::PushInt(value) => write!(f, "{}", value),
+            OpKind::PushList(list) => {
+                write!(f, "[")?;
+                for (i, op) in list.iter().enumerate() {
+                    write!(f, "{}", op)?;
+                    if i < list.len() - 1 {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, "]")
+            }
+            OpKind::PushBlock(block) => {
+                write!(f, "(")?;
+                for (i, op) in block.iter().enumerate() {
+                    write!(f, "{}", op)?;
+                    if i < block.len() - 1 {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, "]")
+            }
+            OpKind::Plus => write!(f, "+"),
+            OpKind::Minus => write!(f, "-"),
+            OpKind::Multiply => write!(f, "*"),
+            OpKind::Divide => write!(f, "/"),
+            OpKind::Modulo => write!(f, "%"),
+            OpKind::LessThan => write!(f, "<"),
+            OpKind::LessThanEquals => write!(f, "<="),
+            OpKind::GreaterThan => write!(f, ">"),
+            OpKind::GreaterThanEquals => write!(f, ">="),
+            OpKind::Equals => write!(f, "="),
+            OpKind::Not => write!(f, "not"),
+            OpKind::And => write!(f, "and"),
+            OpKind::Or => write!(f, "or"),
+            OpKind::Identity => write!(f, "."),
+            OpKind::Over => write!(f, "over"),
+            OpKind::Pop => write!(f, "pop"),
+            OpKind::Rot => write!(f, "rot"),
+            OpKind::Swap => write!(f, "swap"),
+            OpKind::Dup => write!(f, "dup"),
+            OpKind::Print => write!(f, "print"),
+            OpKind::Concat => write!(f, "concat"),
+            OpKind::Do => write!(f, "do"),
+            OpKind::Filter => write!(f, "filter"),
+            OpKind::Fold => write!(f, "fold"),
+            OpKind::Foreach => write!(f, "foreach"),
+            OpKind::Len => write!(f, "len"),
+            OpKind::Map => write!(f, "map"),
+            OpKind::DumpStack => write!(f, "??"),
+            OpKind::DefineFunction { identifier, body } => {
+                if let TokenKind::Identifier(name) = &identifier.kind {
+                    write!(f, "fn {} {}", name, body)
+                } else {
+                    unreachable!()
+                }
+            }
+            OpKind::Call(name) => write!(f, "{}", name),
+        }
+    }
+}
+
 pub struct Parser {
     cursor: usize,
     pub diagnostics: Vec<Diagnostic>,
@@ -58,7 +124,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self, tokens: &Vec<Token>) -> Vec<Op> {
+    pub fn parse(&mut self, tokens: &[Token]) -> Vec<Op> {
         let mut ops: Vec<Op> = vec![];
         while let Some(op) = self.parse_op(tokens) {
             ops.push(op);
@@ -66,7 +132,7 @@ impl Parser {
         ops
     }
 
-    pub fn parse_op(&mut self, tokens: &Vec<Token>) -> Option<Op> {
+    pub fn parse_op(&mut self, tokens: &[Token]) -> Option<Op> {
         let token = tokens.get(self.cursor)?.clone();
 
         self.cursor += 1;
@@ -259,11 +325,10 @@ impl Parser {
         }
     }
 
-    fn parse_block(&mut self, open_paren: &Token, tokens: &Vec<Token>) -> Option<Op> {
+    fn parse_block(&mut self, open_paren: &Token, tokens: &[Token]) -> Option<Op> {
         let mut ops = Vec::new();
 
-        while self.cursor < tokens.len()
-            && tokens[self.cursor].kind != TokenKind::CloseParenthesis
+        while self.cursor < tokens.len() && tokens[self.cursor].kind != TokenKind::CloseParenthesis
         {
             ops.push(self.parse_op(tokens)?);
         }
@@ -288,7 +353,7 @@ impl Parser {
         })
     }
 
-    fn expect_identifier(&mut self, tokens: &Vec<Token>, span: Span) -> Option<Token> {
+    fn expect_identifier(&mut self, tokens: &[Token], span: Span) -> Option<Token> {
         match tokens.get(self.cursor) {
             Some(token) => match &token.kind {
                 TokenKind::Identifier(_) => {
@@ -314,7 +379,12 @@ impl Parser {
             }
         }
     }
-    fn expect_token(&mut self, expected: &TokenKind, tokens: &Vec<Token>, span: Span) -> Option<Token> {
+    fn expect_token(
+        &mut self,
+        expected: &TokenKind,
+        tokens: &[Token],
+        span: Span,
+    ) -> Option<Token> {
         match tokens.get(self.cursor) {
             Some(token) => match &token.kind {
                 kind if kind == expected => {

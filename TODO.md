@@ -4,4 +4,9 @@
 - [x] Better Type Checking
 - [x] Lists
 - [x] Functions
-- [] REPL
+- [x] REPL
+- [ ] Control Flow (if/ifelse)
+- [ ] Structs + Enums
+- [ ] Recursion
+- [ ] Modules/Imports/FFI?
+- [ ] Compilation (WASM?)

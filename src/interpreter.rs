@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 #[derive(Debug, Clone)]
-enum Value {
+pub enum Value {
     Bool(bool),
     Int(i64),
     List(Vec<Value>),
@@ -27,7 +27,16 @@ impl Display for Value {
                     .collect::<Vec<String>>()
                     .join(" ")
             ),
-            Value::Block(_) => write!(f, "fn"),
+            Value::Block(ops) => {
+                write!(f, "(")?;
+                for (i, op) in ops.iter().enumerate() {
+                    write!(f, "{}", op)?;
+                    if i + 1 < ops.len() {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -83,7 +92,7 @@ impl Rem for Value {
 }
 
 pub struct Interpreter {
-    stack: Vec<Value>,
+    pub stack: Vec<Value>,
     functions: HashMap<String, Vec<Op>>,
 }
 
