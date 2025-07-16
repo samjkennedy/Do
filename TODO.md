@@ -5,7 +5,7 @@
 - [x] Lists
 - [x] Functions
 - [x] REPL
-- [ ] Control Flow (if/ifelse)
+- [ ] Control Flow (if/ifelse/return)
 - [ ] Structs + Enums
 - [ ] Recursion
 - [ ] Modules/Imports/FFI?

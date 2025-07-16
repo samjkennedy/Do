@@ -19,5 +19,5 @@ fn any? ((or) false fold)
 [true true true] all?
     print
 
-[false true true] all?
+[false true true] any?
     print

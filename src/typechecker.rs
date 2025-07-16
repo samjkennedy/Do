@@ -517,6 +517,52 @@ impl TypeChecker {
                     }
                 }
             }
+            OpKind::If => (
+                vec![
+                    TypeKind::Bool,
+                    TypeKind::Block {
+                        ins: vec![],
+                        outs: vec![],
+                    },
+                ],
+                vec![],
+            ),
+            OpKind::Choice => {
+                //TODO: really should be using varargs generics, but this will do for now
+                let expected_bool = self.type_stack.last();
+                if let Some((TypeKind::Bool, _)) = expected_bool {
+                    let expected_fn = &self.type_stack.get(self.type_stack.len() - 2);
+                    if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
+                        (
+                            vec![
+                                TypeKind::Bool,
+                                TypeKind::Block {
+                                    ins: ins.clone(),
+                                    outs: outs.clone(),
+                                },
+                                TypeKind::Block {
+                                    ins: ins.clone(),
+                                    outs: outs.clone(),
+                                },
+                            ],
+                            outs.clone(),
+                        )
+                    } else {
+                        //TODO these diagnostics are bad, but it's the best I can do right now
+                        self.diagnostics.push(Diagnostic::report_error(
+                            "incorrect inputs to choice".to_string(),
+                            span,
+                        ));
+                        (vec![], vec![])
+                    }
+                } else {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        "incorrect inputs to choice".to_string(),
+                        span,
+                    ));
+                    (vec![], vec![])
+                }
+            }
         }
     }
 

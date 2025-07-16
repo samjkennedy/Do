@@ -38,6 +38,8 @@ pub enum OpKind {
     DumpStack,
     DefineFunction { identifier: Token, body: Box<Op> },
     Call(String),
+    If,
+    Choice,
 }
 
 #[derive(Debug, Clone)]
@@ -98,7 +100,7 @@ impl Display for Op {
             OpKind::Foreach => write!(f, "foreach"),
             OpKind::Len => write!(f, "len"),
             OpKind::Map => write!(f, "map"),
-            OpKind::DumpStack => write!(f, "??"),
+            OpKind::DumpStack => write!(f, "???"),
             OpKind::DefineFunction { identifier, body } => {
                 if let TokenKind::Identifier(name) = &identifier.kind {
                     write!(f, "fn {} {}", name, body)
@@ -107,6 +109,8 @@ impl Display for Op {
                 }
             }
             OpKind::Call(name) => write!(f, "{}", name),
+            OpKind::If => write!(f, "if"),
+            OpKind::Choice => write!(f, "choice"),
         }
     }
 }
@@ -319,6 +323,14 @@ impl Parser {
             }
             TokenKind::Identifier(identifier) => Some(Op {
                 kind: OpKind::Call(identifier),
+                span: token.span,
+            }),
+            TokenKind::IfKeyword => Some(Op {
+                kind: OpKind::If,
+                span: token.span,
+            }),
+            TokenKind::ChoiceKeyword => Some(Op {
+                kind: OpKind::Choice,
                 span: token.span,
             }),
             TokenKind::Error(_) => None,

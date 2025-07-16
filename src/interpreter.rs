@@ -402,6 +402,38 @@ impl Interpreter {
                     let ops = self.functions.get(name).unwrap().clone();
                     self.interpret(&ops);
                 }
+                OpKind::If => {
+                    if let Value::Bool(condition) = self.stack.pop().unwrap() {
+                        if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                            if condition {
+                                self.interpret(ops);
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Choice => {
+                    if let Value::Bool(condition) = self.stack.pop().unwrap() {
+                        if let Value::Block(else_branch) = &self.stack.pop().unwrap() {
+                            if let Value::Block(then_branch) = &self.stack.pop().unwrap() {
+                                if condition {
+                                    self.interpret(then_branch);
+                                } else {
+                                    self.interpret(else_branch);
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
             }
         }
     }
