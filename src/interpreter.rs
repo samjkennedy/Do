@@ -403,8 +403,8 @@ impl Interpreter {
                     self.interpret(&ops);
                 }
                 OpKind::If => {
-                    if let Value::Bool(condition) = self.stack.pop().unwrap() {
-                        if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::Bool(condition) = self.stack.pop().unwrap() {
                             if condition {
                                 self.interpret(ops);
                             }
@@ -416,9 +416,9 @@ impl Interpreter {
                     }
                 }
                 OpKind::Choice => {
-                    if let Value::Bool(condition) = self.stack.pop().unwrap() {
-                        if let Value::Block(else_branch) = &self.stack.pop().unwrap() {
-                            if let Value::Block(then_branch) = &self.stack.pop().unwrap() {
+                    if let Value::Block(else_branch) = &self.stack.pop().unwrap() {
+                        if let Value::Block(then_branch) = &self.stack.pop().unwrap() {
+                            if let Value::Bool(condition) = self.stack.pop().unwrap() {
                                 if condition {
                                     self.interpret(then_branch);
                                 } else {
