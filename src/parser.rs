@@ -29,6 +29,9 @@ pub enum OpKind {
     Dup,
     Print,
     Concat,
+    Head,
+    Tail,
+    Push,
     Do,
     Filter,
     Fold,
@@ -38,6 +41,8 @@ pub enum OpKind {
     DumpStack,
     DefineFunction { identifier: Token, body: Box<Op> },
     Call(String),
+    If,
+    Choice,
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +74,7 @@ impl Display for Op {
                         write!(f, " ")?;
                     }
                 }
-                write!(f, "]")
+                write!(f, ")")
             }
             OpKind::Plus => write!(f, "+"),
             OpKind::Minus => write!(f, "-"),
@@ -92,13 +97,16 @@ impl Display for Op {
             OpKind::Dup => write!(f, "dup"),
             OpKind::Print => write!(f, "print"),
             OpKind::Concat => write!(f, "concat"),
+            OpKind::Head => write!(f, "head"),
+            OpKind::Tail => write!(f, "tail"),
+            OpKind::Push => write!(f, "push"),
             OpKind::Do => write!(f, "do"),
             OpKind::Filter => write!(f, "filter"),
             OpKind::Fold => write!(f, "fold"),
             OpKind::Foreach => write!(f, "foreach"),
             OpKind::Len => write!(f, "len"),
             OpKind::Map => write!(f, "map"),
-            OpKind::DumpStack => write!(f, "??"),
+            OpKind::DumpStack => write!(f, "???"),
             OpKind::DefineFunction { identifier, body } => {
                 if let TokenKind::Identifier(name) = &identifier.kind {
                     write!(f, "fn {} {}", name, body)
@@ -107,6 +115,8 @@ impl Display for Op {
                 }
             }
             OpKind::Call(name) => write!(f, "{}", name),
+            OpKind::If => write!(f, "if"),
+            OpKind::Choice => write!(f, "choice"),
         }
     }
 }
@@ -273,6 +283,18 @@ impl Parser {
                 kind: OpKind::Concat,
                 span: token.span,
             }),
+            TokenKind::PushKeyword => Some(Op {
+                kind: OpKind::Push,
+                span: token.span,
+            }),
+            TokenKind::HeadKeyword => Some(Op {
+                kind: OpKind::Head,
+                span: token.span,
+            }),
+            TokenKind::TailKeyword => Some(Op {
+                kind: OpKind::Tail,
+                span: token.span,
+            }),
             TokenKind::DoKeyword => Some(Op {
                 kind: OpKind::Do,
                 span: token.span,
@@ -319,6 +341,14 @@ impl Parser {
             }
             TokenKind::Identifier(identifier) => Some(Op {
                 kind: OpKind::Call(identifier),
+                span: token.span,
+            }),
+            TokenKind::IfKeyword => Some(Op {
+                kind: OpKind::If,
+                span: token.span,
+            }),
+            TokenKind::ChoiceKeyword => Some(Op {
+                kind: OpKind::Choice,
                 span: token.span,
             }),
             TokenKind::Error(_) => None,

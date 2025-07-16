@@ -31,6 +31,9 @@ pub enum TokenKind {
     SwapKeyword,
     PrintKeyword,
     ConcatKeyword,
+    PushKeyword,
+    HeadKeyword,
+    TailKeyword,
     DoKeyword,
     FilterKeyword,
     FoldKeyword,
@@ -38,6 +41,8 @@ pub enum TokenKind {
     MapKeyword,
     TripleQuestion,
     FnKeyword,
+    IfKeyword,
+    ChoiceKeyword,
     Error(String),
 }
 
@@ -308,6 +313,18 @@ impl Lexer {
                 kind: TokenKind::ConcatKeyword,
                 span: Span { offset, length },
             },
+            "push" => Token {
+                kind: TokenKind::PushKeyword,
+                span: Span { offset, length },
+            },
+            "head" => Token {
+                kind: TokenKind::HeadKeyword,
+                span: Span { offset, length },
+            },
+            "tail" => Token {
+                kind: TokenKind::TailKeyword,
+                span: Span { offset, length },
+            },
             "do" => Token {
                 kind: TokenKind::DoKeyword,
                 span: Span { offset, length },
@@ -338,6 +355,14 @@ impl Lexer {
             },
             "fn" => Token {
                 kind: TokenKind::FnKeyword,
+                span: Span { offset, length },
+            },
+            "if" => Token {
+                kind: TokenKind::IfKeyword,
+                span: Span { offset, length },
+            },
+            "choice" => Token {
+                kind: TokenKind::ChoiceKeyword,
                 span: Span { offset, length },
             },
             &_ => Token {

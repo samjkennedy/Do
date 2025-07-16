@@ -52,7 +52,7 @@ pub fn repl_mode() -> anyhow::Result<()> {
                     parser = Parser::new();
 
                     //save the state of the stack before type checking, so we can rewind if there is an error
-                    let checkpoint = type_checker.clone();
+                    let type_checker_checkpoint = type_checker.clone();
                     type_checker.type_check(&ops);
 
                     if !&type_checker.diagnostics.is_empty() {
@@ -60,12 +60,23 @@ pub fn repl_mode() -> anyhow::Result<()> {
                             diagnostic.display_diagnostic("", &line);
                         }
                         //rewind
-                        type_checker = checkpoint;
+                        type_checker = type_checker_checkpoint;
                         print_input_symbol()?;
                         continue;
                     }
 
+                    let interpreter_checkpoint = interpreter.clone();
                     interpreter.interpret(&ops);
+
+                    if !&interpreter.diagnostics.is_empty() {
+                        for diagnostic in &interpreter.diagnostics {
+                            diagnostic.display_diagnostic("", &line);
+                        }
+                        //rewind
+                        interpreter = interpreter_checkpoint;
+                        print_input_symbol()?;
+                        continue;
+                    }
 
                     if !&interpreter.stack.is_empty() {
                         print!("{}", GREY);

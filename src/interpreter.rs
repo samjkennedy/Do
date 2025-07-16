@@ -4,6 +4,7 @@ use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Rem, Sub};
+use crate::diagnostic::Diagnostic;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -91,9 +92,11 @@ impl Rem for Value {
     }
 }
 
+#[derive(Clone)]
 pub struct Interpreter {
     pub stack: Vec<Value>,
     functions: HashMap<String, Vec<Op>>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl PartialEq<Self> for Value {
@@ -121,12 +124,14 @@ impl Interpreter {
         Interpreter {
             stack: Vec::new(),
             functions: HashMap::new(),
+            diagnostics: Vec::new(),
         }
     }
     pub fn new_sub(functions: HashMap<String, Vec<Op>>) -> Interpreter {
         Interpreter {
             stack: Vec::new(),
             functions,
+            diagnostics: Vec::new(),
         }
     }
 
@@ -300,7 +305,48 @@ impl Interpreter {
                             result.extend(rhs.clone());
                             result.extend(lhs.clone());
                             self.stack.push(Value::List(result));
+                        } else {
+                            unreachable!()
                         }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Push => {
+                    let value = &self.stack.pop().unwrap();
+                    if let Value::List(values) = &self.stack.pop().unwrap() {
+                        let mut result = Vec::new();
+                        result.extend(values.clone());
+                        result.push(value.clone());
+                        self.stack.push(Value::List(result));
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Head => {
+                    if let Value::List(values) = &self.stack.pop().unwrap() {
+                        if values.is_empty() {
+                            self.diagnostics.push(Diagnostic::report_error(
+                                "Cannot `head` an empty list".to_string(),
+                                op.span,
+                            ));
+                            continue;
+                        }
+                        self.stack.push(values[0].clone());
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Tail => {
+                    if let Value::List(values) = &self.stack.pop().unwrap() {
+                        if values.is_empty() {
+                            self.stack.push(Value::List(vec![]));
+                            continue;
+                        }
+                        let result = values[1..].to_vec().clone();
+                        self.stack.push(Value::List(result));
+                    } else {
+                        unreachable!()
                     }
                 }
                 OpKind::Do => {
@@ -401,6 +447,38 @@ impl Interpreter {
                 OpKind::Call(name) => {
                     let ops = self.functions.get(name).unwrap().clone();
                     self.interpret(&ops);
+                }
+                OpKind::If => {
+                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
+                        if let Value::Bool(condition) = self.stack.pop().unwrap() {
+                            if condition {
+                                self.interpret(ops);
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                OpKind::Choice => {
+                    if let Value::Block(else_branch) = &self.stack.pop().unwrap() {
+                        if let Value::Block(then_branch) = &self.stack.pop().unwrap() {
+                            if let Value::Bool(condition) = self.stack.pop().unwrap() {
+                                if condition {
+                                    self.interpret(then_branch);
+                                } else {
+                                    self.interpret(else_branch);
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        unreachable!()
+                    }
                 }
             }
         }

@@ -415,6 +415,33 @@ impl TypeChecker {
                     vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
                 )
             }
+            OpKind::Push => {
+                let index = self.create_generic();
+
+                (
+                    vec![
+                        TypeKind::Generic(index),
+                        TypeKind::List(Box::new(TypeKind::Generic(index))),
+                    ],
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                )
+            }
+            OpKind::Head => {
+                let index = self.create_generic();
+
+                (
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                    vec![TypeKind::Generic(index)],
+                )
+            }
+            OpKind::Tail => {
+                let index = self.create_generic();
+
+                (
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                )
+            }
             OpKind::Do => {
                 (
                     vec![TypeKind::Block {
@@ -440,16 +467,17 @@ impl TypeChecker {
             }
             OpKind::Fold => {
                 let a = self.create_generic();
+                let b = self.create_generic();
                 (
                     vec![
-                        TypeKind::Generic(a),
+                        TypeKind::Generic(b),
                         TypeKind::Block {
-                            ins: vec![TypeKind::Generic(a), TypeKind::Generic(a)],
-                            outs: vec![TypeKind::Generic(a)],
+                            ins: vec![TypeKind::Generic(a), TypeKind::Generic(b)],
+                            outs: vec![TypeKind::Generic(b)],
                         },
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
-                    vec![TypeKind::Generic(a)],
+                    vec![TypeKind::Generic(b)],
                 )
             }
             OpKind::Foreach => {
@@ -515,6 +543,54 @@ impl TypeChecker {
                         ));
                         (vec![], vec![]) //return nothing to keep going
                     }
+                }
+            }
+            OpKind::If => (
+                //TODO: allow any function that doesn't modify the typestack
+                //      needs varargs
+                vec![
+                    TypeKind::Block {
+                        ins: vec![],
+                        outs: vec![],
+                    },
+                    TypeKind::Bool,
+                ],
+                vec![],
+            ),
+            OpKind::Choice => {
+                //TODO: really should be using varargs generics, but this will do for now
+                //      Without varargs we cannot type check choice inside functions
+                let expected_fn = self.type_stack.last();
+                if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
+                    let expected_bool = &self.type_stack.get(self.type_stack.len() - 3);
+                    if let Some((TypeKind::Bool, _)) = expected_bool {
+                        let mut choice_ins = vec![
+                            TypeKind::Block {
+                                ins: ins.clone(),
+                                outs: outs.clone(),
+                            },
+                            TypeKind::Block {
+                                ins: ins.clone(),
+                                outs: outs.clone(),
+                            },
+                            TypeKind::Bool,
+                        ];
+                        choice_ins.extend(ins.clone());
+                        (choice_ins, outs.clone())
+                    } else {
+                        //TODO these diagnostics are bad, but it's the best I can do right now
+                        self.diagnostics.push(Diagnostic::report_error(
+                            "incorrect inputs to choice, expected bool".to_string(),
+                            span,
+                        ));
+                        (vec![], vec![])
+                    }
+                } else {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        "incorrect inputs to choice, expected fn".to_string(),
+                        span,
+                    ));
+                    (vec![], vec![])
                 }
             }
         }
