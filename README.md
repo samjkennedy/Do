@@ -68,12 +68,12 @@ operators in Do so far:
 
 ### List Operations
 
-| Operation | Signature      | Description                                 |
-|-----------|----------------|---------------------------------------------|
-| len       | [a] -> int     | Length of a list                            |
-| concat    | [a] [a] -> [a] | Concatenate two lists                       |
-| head      | [a] -> a       | Returns the first element of a list         |
-| tail      | [a] -> [a]     | Returns all but the first element of a list |
+| Operation | Signature      | Description                                |
+|-----------|----------------|--------------------------------------------|
+| len       | [a] -> int     | Length of a list                           |
+| concat    | [a] [a] -> [a] | Concatenate two lists                      |
+| head      | [a] -> a       | Return the first element of a list         |
+| tail      | [a] -> [a]     | Return all but the first element of a list |
 
 ### Misc
 
