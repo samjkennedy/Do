@@ -440,16 +440,17 @@ impl TypeChecker {
             }
             OpKind::Fold => {
                 let a = self.create_generic();
+                let b = self.create_generic();
                 (
                     vec![
-                        TypeKind::Generic(a),
+                        TypeKind::Generic(b),
                         TypeKind::Block {
-                            ins: vec![TypeKind::Generic(a), TypeKind::Generic(a)],
-                            outs: vec![TypeKind::Generic(a)],
+                            ins: vec![TypeKind::Generic(a), TypeKind::Generic(b)],
+                            outs: vec![TypeKind::Generic(b)],
                         },
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
-                    vec![TypeKind::Generic(a)],
+                    vec![TypeKind::Generic(b)],
                 )
             }
             OpKind::Foreach => {
@@ -518,6 +519,8 @@ impl TypeChecker {
                 }
             }
             OpKind::If => (
+                //TODO: allow any function that doesn't modify the typestack
+                //      needs varargs
                 vec![
                     TypeKind::Block {
                         ins: vec![],
@@ -529,6 +532,7 @@ impl TypeChecker {
             ),
             OpKind::Choice => {
                 //TODO: really should be using varargs generics, but this will do for now
+                //      Without varargs we cannot type check choice inside functions
                 let expected_fn = self.type_stack.last();
                 if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
                     let expected_bool =  &self.type_stack.get(self.type_stack.len() - 3);

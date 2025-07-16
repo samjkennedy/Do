@@ -71,7 +71,7 @@ impl Display for Op {
                         write!(f, " ")?;
                     }
                 }
-                write!(f, "]")
+                write!(f, ")")
             }
             OpKind::Plus => write!(f, "+"),
             OpKind::Minus => write!(f, "-"),
