@@ -31,6 +31,9 @@ pub enum TokenKind {
     SwapKeyword,
     PrintKeyword,
     ConcatKeyword,
+    PushKeyword,
+    HeadKeyword,
+    TailKeyword,
     DoKeyword,
     FilterKeyword,
     FoldKeyword,
@@ -308,6 +311,18 @@ impl Lexer {
             },
             "concat" => Token {
                 kind: TokenKind::ConcatKeyword,
+                span: Span { offset, length },
+            },
+            "push" => Token {
+                kind: TokenKind::PushKeyword,
+                span: Span { offset, length },
+            },
+            "head" => Token {
+                kind: TokenKind::HeadKeyword,
+                span: Span { offset, length },
+            },
+            "tail" => Token {
+                kind: TokenKind::TailKeyword,
                 span: Span { offset, length },
             },
             "do" => Token {

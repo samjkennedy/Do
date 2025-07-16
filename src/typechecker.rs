@@ -415,6 +415,33 @@ impl TypeChecker {
                     vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
                 )
             }
+            OpKind::Push => {
+                let index = self.create_generic();
+
+                (
+                    vec![
+                        TypeKind::Generic(index),
+                        TypeKind::List(Box::new(TypeKind::Generic(index))),
+                    ],
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                )
+            }
+            OpKind::Head => {
+                let index = self.create_generic();
+
+                (
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                    vec![TypeKind::Generic(index)],
+                )
+            }
+            OpKind::Tail => {
+                let index = self.create_generic();
+
+                (
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                )
+            }
             OpKind::Do => {
                 (
                     vec![TypeKind::Block {
@@ -535,7 +562,7 @@ impl TypeChecker {
                 //      Without varargs we cannot type check choice inside functions
                 let expected_fn = self.type_stack.last();
                 if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
-                    let expected_bool =  &self.type_stack.get(self.type_stack.len() - 3);
+                    let expected_bool = &self.type_stack.get(self.type_stack.len() - 3);
                     if let Some((TypeKind::Bool, _)) = expected_bool {
                         let mut choice_ins = vec![
                             TypeKind::Block {
@@ -549,10 +576,7 @@ impl TypeChecker {
                             TypeKind::Bool,
                         ];
                         choice_ins.extend(ins.clone());
-                        (
-                            choice_ins,
-                            outs.clone(),
-                        )
+                        (choice_ins, outs.clone())
                     } else {
                         //TODO these diagnostics are bad, but it's the best I can do right now
                         self.diagnostics.push(Diagnostic::report_error(

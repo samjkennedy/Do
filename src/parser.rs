@@ -29,6 +29,9 @@ pub enum OpKind {
     Dup,
     Print,
     Concat,
+    Head,
+    Tail,
+    Push,
     Do,
     Filter,
     Fold,
@@ -94,6 +97,9 @@ impl Display for Op {
             OpKind::Dup => write!(f, "dup"),
             OpKind::Print => write!(f, "print"),
             OpKind::Concat => write!(f, "concat"),
+            OpKind::Head => write!(f, "head"),
+            OpKind::Tail => write!(f, "tail"),
+            OpKind::Push => write!(f, "push"),
             OpKind::Do => write!(f, "do"),
             OpKind::Filter => write!(f, "filter"),
             OpKind::Fold => write!(f, "fold"),
@@ -275,6 +281,18 @@ impl Parser {
             }),
             TokenKind::ConcatKeyword => Some(Op {
                 kind: OpKind::Concat,
+                span: token.span,
+            }),
+            TokenKind::PushKeyword => Some(Op {
+                kind: OpKind::Push,
+                span: token.span,
+            }),
+            TokenKind::HeadKeyword => Some(Op {
+                kind: OpKind::Head,
+                span: token.span,
+            }),
+            TokenKind::TailKeyword => Some(Op {
+                kind: OpKind::Tail,
                 span: token.span,
             }),
             TokenKind::DoKeyword => Some(Op {
