@@ -224,6 +224,8 @@ fn compile_file(input_path: &String, run: bool, args: &[String]) -> Result<(), E
             .output()
             .expect("failed to execute fasm");
     }
+    
+    println!("Compiled to {}",  &exe_file);
 
     if run {
         let output = Command::new(format!("./{}", exe_file))

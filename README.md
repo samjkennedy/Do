@@ -1,9 +1,15 @@
+<div>
+  <picture>
+        <img src="logo.svg" width="50%" alt="The Do Programming Language">
+  </picture> 
+</div>
+
 # Do Programming Language
 
-Do is a stack-based, functional programming language designed around composition, inference, and lists. The
+Do is a stack-based, strongly typed, functional programming language designed around composition, inference, and lists. The
 concatenation of two programs is their composition.
 
-It draws inspiration from Forth, Porth, and Factor and Joy, combining postfix syntax with Hindley-Milner-esque
+It draws inspiration from Forth, Porth, Factor and Joy, combining postfix syntax with Hindley-Milner-esque
 type inference and first-class functions.
 
 ## Design Goals
@@ -12,6 +18,62 @@ type inference and first-class functions.
 - First-class functions: Lambdas and Higher Order Functions are core.
 - Static type checking with type inference.
 - Interactive development via a built-in REPL.
+
+## Getting Started
+
+Do is still heavily in development, so be warned that certain features are either not yet implemented for all targets or
+are just straight broken.
+
+The REPL and the interpreter are the most stable ways of using Do for now.
+
+Build Do from scratch:
+
+```
+$ cargo build --release
+```
+
+Enter REPL mode:
+
+```
+$ do
+(≡) 4 5 + print
+9
+(≡)
+```
+
+For a given .do file:
+
+```
+$ cat square.do
+fn square (dup *)
+
+[1 2 3 4 5]
+    (square) map
+    print
+```
+
+Interpret a Do file with the -i flag before the file name (Recommended):
+
+```
+$ do -i square.do
+[1 4 9 16 25]
+```
+
+Compile a Do file to .exe (Highly unstable, currently only supports 64 bit windows):
+
+```
+$ do square.do
+Compiled to square.exe
+$ square
+[1 4 9 16 25]
+```
+
+Also supports `-r` to immediately run the compiled file
+
+```
+do -r square.do
+[1 4 9 16 25]
+```
 
 ## Core Operations
 
