@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="114.41945mm"
+   height="129.28441mm"
+   viewBox="0 0 114.41945 129.28441"
+   version="1.1"
+   id="svg1"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <linearGradient
+       id="linearGradient4">
+      <stop
+         style="stop-color:#005d41;stop-opacity:1;"
+         offset="0.47813413"
+         id="stop4" />
+      <stop
+         style="stop-color:#137e52;stop-opacity:1;"
+         offset="0.47999999"
+         id="stop5" />
+    </linearGradient>
+    <linearGradient
+       xlink:href="#linearGradient4"
+       id="linearGradient5"
+       x1="70.152199"
+       y1="29.897869"
+       x2="127.36192"
+       y2="128.98801"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
+  <g
+     id="layer1"
+     transform="translate(-47.790281,-83.8578)">
+    <path
+       style="fill:url(#linearGradient5);stroke-width:0.132291;stroke-dasharray:none"
+       id="path1"
+       d="m 151.38406,115.11883 -48.04429,27.73838 a 9.1654352,9.1654352 2.521989e-7 0 1 -9.165431,0 L 46.130053,115.11883 a 9.1654352,9.1654352 60 0 1 -4.582718,-7.9375 l 0,-55.476765 a 9.1654352,9.1654352 120 0 1 4.582718,-7.937499 L 94.17434,16.028684 a 9.1654352,9.1654352 2.5219888e-7 0 1 9.16544,0 l 48.04428,27.738382 a 9.1654352,9.1654352 60 0 1 4.58272,7.9375 l 0,55.476764 a 9.1654352,9.1654352 120 0 1 -4.58272,7.9375 z"
+       transform="translate(6.2429428,69.057053)" />
+    <path
+       style="fill:#ffffff;fill-opacity:1;stroke-width:0.132291;stroke-dasharray:none"
+       d="M 159.43251,75.616564 47.374233,139.20736"
+       id="path3" />
+    <text
+       xml:space="preserve"
+       style="font-size:63.5px;line-height:0;text-align:start;letter-spacing:-3.36815px;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#ffffff;fill-opacity:1;stroke-width:4.83791;stroke-dasharray:none"
+       x="105"
+       y="165.93074"
+       id="text5"><tspan
+         id="tspan5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:63.5px;line-height:0;font-family:Monospace;-inkscape-font-specification:'Monospace Bold';text-align:center;letter-spacing:-3.36815px;text-anchor:middle;stroke:#000000;stroke-width:4.83791;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
+         x="103.31593"
+         y="165.93074"
+         dy="0 0 0">(<tspan
+   style="font-size:70.5556px;letter-spacing:-3.36815px"
+   id="tspan6"
+   dy="0">≡</tspan>)</tspan></text>
+  </g>
+</svg>
