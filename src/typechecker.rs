@@ -17,6 +17,47 @@ pub enum TypeKind {
     Generic(usize),
 }
 
+#[derive(Debug, Clone)]
+pub enum TypedOpKind {
+    PushBool(bool),
+    PushInt(i64),
+    PushList(Vec<TypedOp>),
+    PushBlock(Vec<TypedOp>),
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulo,
+    LessThan,
+    LessThanEquals,
+    GreaterThan,
+    GreaterThanEquals,
+    Equals,
+    Not,
+    And,
+    Or,
+    Identity,
+    Over,
+    Pop,
+    Rot,
+    Swap,
+    Dup,
+    Print,
+    Concat,
+    Head,
+    Tail,
+    Push,
+    Do,
+    Filter,
+    Fold,
+    Foreach,
+    Len,
+    Map,
+    DumpStack,
+    DefineFunction { name: String, block: Box<TypedOp> },
+    Call(String),
+}
+
 impl Display for TypeKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -38,6 +79,13 @@ impl Display for TypeKind {
             TypeKind::Generic(index) => write!(f, "<{}>", index),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypedOp {
+    pub kind: TypedOpKind,
+    pub ins: Vec<TypeKind>,
+    pub outs: Vec<TypeKind>, //No need for the outs in lowering yet, so comment it to silence the compiler warnings
 }
 
 #[derive(Clone)]
@@ -62,16 +110,17 @@ impl TypeChecker {
         }
     }
 
-    pub fn type_check(&mut self, ops: &Vec<Op>) {
+    pub fn type_check(&mut self, ops: &Vec<Op>) -> Vec<TypedOp> {
+        let mut typed_ops = Vec::new();
         for op in ops {
             // println!("op: {:?}", op.kind);
-            let (ins, outs) = self.get_signature(&op.kind, op.span);
+            let typed_op = self.type_check_op(&op.kind, op.span);
 
             // println!("  ins: {:?}, outs: {:?}", ins, outs);
 
-            for input in ins {
+            for input in typed_op.ins.clone() {
                 match self.type_stack.pop() {
-                    Some((type_kind, _span)) => self.expect_type(&type_kind, &input, op.span),
+                    Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
                     None => self.diagnostics.push(Diagnostic::report_error(
                         format!("Expected {} but stack was empty", input),
                         op.span,
@@ -79,9 +128,23 @@ impl TypeChecker {
                 }
             }
 
-            for output in outs {
+            for output in typed_op.outs.clone() {
                 self.type_stack.push((output, op.span));
             }
+
+            typed_ops.push(TypedOp {
+                kind: typed_op.kind,
+                ins: typed_op
+                    .ins
+                    .iter()
+                    .map(|t| self.erase(t).unwrap_or(t.clone()))
+                    .collect(),
+                outs: typed_op
+                    .outs
+                    .iter()
+                    .map(|t| self.erase(t).unwrap_or(t.clone()))
+                    .collect(),
+            });
         }
 
         if self.fail_on_non_empty_stack {
@@ -95,6 +158,7 @@ impl TypeChecker {
                 ))
             }
         }
+        typed_ops
     }
 
     fn erase(&self, type_kind: &TypeKind) -> Option<TypeKind> {
@@ -194,7 +258,7 @@ impl TypeChecker {
             //These generic/list pairings feel like they're patching over a mistake somewhere else...
             (TypeKind::List(lhs), TypeKind::Generic(index)) => {
                 match self.erasures.get(*index).unwrap().clone() {
-                    None => self.erase_generic(index, expected),
+                    None => self.erase_generic(index, actual),
                     Some(type_kind) => self.expect_type_inner(
                         lhs,
                         &type_kind,
@@ -264,23 +328,37 @@ impl TypeChecker {
         self.erasures[*index] = erased;
     }
 
-    fn get_signature(&mut self, op_kind: &OpKind, span: Span) -> (Vec<TypeKind>, Vec<TypeKind>) {
+    fn type_check_op(&mut self, op_kind: &OpKind, span: Span) -> TypedOp {
         match op_kind {
-            OpKind::PushBool(_) => (vec![], vec![TypeKind::Bool]),
-            OpKind::PushInt(_) => (vec![], vec![TypeKind::Int]),
+            OpKind::PushBool(value) => TypedOp {
+                kind: TypedOpKind::PushBool(*value),
+                ins: vec![],
+                outs: vec![TypeKind::Bool],
+            },
+            OpKind::PushInt(value) => TypedOp {
+                kind: TypedOpKind::PushInt(*value),
+                ins: vec![],
+                outs: vec![TypeKind::Int],
+            },
             OpKind::PushList(ops) => {
                 let mut element_type: Option<TypeKind> = None;
+
+                let mut elements = Vec::new();
                 for op in ops {
-                    let (ins, outs) = self.get_signature(&op.kind, op.span);
-                    if !ins.is_empty() || outs.len() != 1 {
+                    let typed_op = self.type_check_op(&op.kind, span);
+                    if !typed_op.ins.is_empty() || typed_op.outs.len() != 1 {
                         self.diagnostics.push(Diagnostic::report_error(
                             format!(
                                 "List elements must have the signature [ -- <a>], got [{} -- {}]",
-                                ins.iter()
+                                typed_op
+                                    .ins
+                                    .iter()
                                     .map(|x| x.to_string())
                                     .collect::<Vec<String>>()
                                     .join(" "),
-                                outs.iter()
+                                typed_op
+                                    .outs
+                                    .iter()
                                     .map(|x| x.to_string())
                                     .collect::<Vec<String>>()
                                     .join(" ")
@@ -291,185 +369,259 @@ impl TypeChecker {
                         return match element_type {
                             None => {
                                 let index = self.create_generic();
-                                (
-                                    vec![],
-                                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                                )
+                                TypedOp {
+                                    kind: TypedOpKind::PushList(vec![]),
+                                    ins: vec![],
+                                    outs: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                                }
                             }
-                            Some(type_kind) => (vec![], vec![TypeKind::List(Box::new(type_kind))]),
+                            Some(type_kind) => TypedOp {
+                                kind: TypedOpKind::PushList(vec![]),
+                                ins: vec![],
+                                outs: vec![TypeKind::List(Box::new(type_kind))],
+                            },
                         };
                     }
-                    let out = outs.first().unwrap();
+
+                    let out = typed_op.outs.first().unwrap();
                     match &element_type {
                         Some(type_kind) => self.expect_type(type_kind, out, op.span),
                         None => element_type = Some(out.clone()),
                     }
+
+                    elements.push(typed_op);
                 }
                 match element_type {
                     None => {
                         let index = self.create_generic();
-                        (
-                            vec![],
-                            vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                        )
+                        TypedOp {
+                            kind: TypedOpKind::PushList(elements),
+                            ins: vec![],
+                            outs: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                        }
                     }
-                    Some(type_kind) => (vec![], vec![TypeKind::List(Box::new(type_kind))]),
+                    Some(type_kind) => TypedOp {
+                        kind: TypedOpKind::PushList(elements),
+                        ins: vec![],
+                        outs: vec![TypeKind::List(Box::new(type_kind))],
+                    },
                 }
             }
             OpKind::PushBlock(ops) => {
-                let (ins, outs) = self.get_block_signature(ops);
-                (vec![], vec![TypeKind::Block { ins, outs }])
+                let typed_block = self.type_check_block(ops, span);
+                TypedOp {
+                    kind: typed_block.kind,
+                    ins: vec![],
+                    outs: vec![TypeKind::Block {
+                        ins: typed_block.ins,
+                        outs: typed_block.outs,
+                    }],
+                }
             }
+
             OpKind::Plus | OpKind::Minus | OpKind::Multiply | OpKind::Divide | OpKind::Modulo => {
-                (vec![TypeKind::Int, TypeKind::Int], vec![TypeKind::Int])
+                TypedOp {
+                    kind: match op_kind {
+                        OpKind::Plus => TypedOpKind::Plus,
+                        OpKind::Minus => TypedOpKind::Minus,
+                        OpKind::Multiply => TypedOpKind::Multiply,
+                        OpKind::Divide => TypedOpKind::Divide,
+                        OpKind::Modulo => TypedOpKind::Modulo,
+                        _ => unreachable!(),
+                    },
+                    ins: vec![TypeKind::Int, TypeKind::Int],
+                    outs: vec![TypeKind::Int],
+                }
             }
             OpKind::LessThan
             | OpKind::GreaterThan
             | OpKind::LessThanEquals
-            | OpKind::GreaterThanEquals => {
-                (vec![TypeKind::Int, TypeKind::Int], vec![TypeKind::Bool])
-            }
+            | OpKind::GreaterThanEquals => TypedOp {
+                kind: match op_kind {
+                    OpKind::LessThan => TypedOpKind::LessThan,
+                    OpKind::GreaterThan => TypedOpKind::GreaterThan,
+                    OpKind::LessThanEquals => TypedOpKind::LessThanEquals,
+                    OpKind::GreaterThanEquals => TypedOpKind::GreaterThanEquals,
+                    _ => unreachable!(),
+                },
+                ins: vec![TypeKind::Int, TypeKind::Int],
+                outs: vec![TypeKind::Bool],
+            },
             OpKind::Equals => {
                 let index = self.create_generic();
-                (
-                    vec![TypeKind::Generic(index), TypeKind::Generic(index)],
-                    vec![TypeKind::Bool],
-                )
+                TypedOp {
+                    kind: TypedOpKind::Equals,
+                    ins: vec![TypeKind::Generic(index), TypeKind::Generic(index)],
+                    outs: vec![TypeKind::Bool],
+                }
             }
-            OpKind::Not => (vec![TypeKind::Bool], vec![TypeKind::Bool]),
+            OpKind::Not => TypedOp {
+                kind: TypedOpKind::Not,
+                ins: vec![TypeKind::Bool],
+                outs: vec![TypeKind::Bool],
+            },
             OpKind::Identity => {
                 let index = self.create_generic();
-                (
-                    vec![TypeKind::Generic(index)],
-                    vec![TypeKind::Generic(index)],
-                )
+                TypedOp {
+                    kind: TypedOpKind::Identity,
+                    ins: vec![TypeKind::Generic(index)],
+                    outs: vec![TypeKind::Generic(index)],
+                }
             }
-            OpKind::And => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
-            OpKind::Or => (vec![TypeKind::Bool, TypeKind::Bool], vec![TypeKind::Bool]),
+            OpKind::And => TypedOp {
+                kind: TypedOpKind::And,
+                ins: vec![TypeKind::Bool],
+                outs: vec![TypeKind::Bool],
+            },
+            OpKind::Or => TypedOp {
+                kind: TypedOpKind::Or,
+                ins: vec![TypeKind::Bool],
+                outs: vec![TypeKind::Bool],
+            },
             OpKind::Dup => {
                 let index = self.create_generic();
-                (
-                    vec![TypeKind::Generic(index)],
-                    vec![TypeKind::Generic(index), TypeKind::Generic(index)],
-                )
+                TypedOp {
+                    kind: TypedOpKind::Dup,
+                    ins: vec![TypeKind::Generic(index)],
+                    outs: vec![TypeKind::Generic(index), TypeKind::Generic(index)],
+                }
             }
             OpKind::Len => {
                 let index = self.create_generic();
-                (vec![TypeKind::Generic(index)], vec![TypeKind::Int])
+                TypedOp {
+                    kind: TypedOpKind::Len,
+                    ins: vec![TypeKind::Generic(index)],
+                    outs: vec![TypeKind::Int],
+                }
             }
             OpKind::Over => {
                 let a = self.create_generic();
                 let b = self.create_generic();
 
-                (
-                    vec![TypeKind::Generic(a), TypeKind::Generic(b)],
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Over,
+                    ins: vec![TypeKind::Generic(a), TypeKind::Generic(b)],
+                    outs: vec![
                         TypeKind::Generic(a),
                         TypeKind::Generic(b),
                         TypeKind::Generic(a),
                     ],
-                )
+                }
             }
             OpKind::Pop => {
                 let index = self.create_generic();
 
-                (vec![TypeKind::Generic(index)], vec![])
+                TypedOp {
+                    kind: TypedOpKind::Pop,
+                    ins: vec![TypeKind::Generic(index)],
+                    outs: vec![],
+                }
             }
             OpKind::Rot => {
                 let a = self.create_generic();
                 let b = self.create_generic();
                 let c = self.create_generic();
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Rot,
+                    ins: vec![
                         TypeKind::Generic(a),
                         TypeKind::Generic(b),
                         TypeKind::Generic(c),
                     ],
-                    vec![
+                    outs: vec![
                         TypeKind::Generic(b),
                         TypeKind::Generic(a),
                         TypeKind::Generic(c),
                     ],
-                )
+                }
             }
             OpKind::Swap => {
                 let a = self.create_generic();
                 let b = self.create_generic();
-                (
-                    vec![TypeKind::Generic(a), TypeKind::Generic(b)],
-                    vec![TypeKind::Generic(a), TypeKind::Generic(b)],
-                )
+                TypedOp {
+                    kind: TypedOpKind::Swap,
+                    ins: vec![TypeKind::Generic(a), TypeKind::Generic(b)],
+                    outs: vec![TypeKind::Generic(a), TypeKind::Generic(b)],
+                }
             }
             OpKind::Print => {
                 let index = self.create_generic();
 
-                (vec![TypeKind::Generic(index)], vec![])
+                TypedOp {
+                    kind: TypedOpKind::Print,
+                    ins: vec![TypeKind::Generic(index)],
+                    outs: vec![],
+                }
             }
             OpKind::Concat => {
                 let index = self.create_generic();
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Concat,
+                    ins: vec![
                         TypeKind::List(Box::new(TypeKind::Generic(index))),
                         TypeKind::List(Box::new(TypeKind::Generic(index))),
                     ],
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                )
+                    outs: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                }
             }
             OpKind::Push => {
                 let index = self.create_generic();
 
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Push,
+                    ins: vec![
                         TypeKind::Generic(index),
                         TypeKind::List(Box::new(TypeKind::Generic(index))),
                     ],
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                )
+                    outs: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                }
             }
             OpKind::Head => {
                 let index = self.create_generic();
 
-                (
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                    vec![TypeKind::Generic(index)],
-                )
+                TypedOp {
+                    kind: TypedOpKind::Head,
+                    ins: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                    outs: vec![TypeKind::Generic(index)],
+                }
             }
             OpKind::Tail => {
                 let index = self.create_generic();
 
-                (
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
-                )
+                TypedOp {
+                    kind: TypedOpKind::Tail,
+                    ins: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                    outs: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
+                }
             }
-            OpKind::Do => {
-                (
-                    vec![TypeKind::Block {
-                        ins: vec![], //TODO: Do should accept varargs
-                        outs: vec![],
-                    }],
-                    vec![],
-                )
-            }
+            OpKind::Do => TypedOp {
+                kind: TypedOpKind::Do,
+                ins: vec![TypeKind::Block {
+                    ins: vec![], //TODO: Do should accept varargs
+                    outs: vec![],
+                }],
+                outs: vec![],
+            },
             OpKind::Filter => {
                 let a = self.create_generic();
-
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Filter,
+                    ins: vec![
                         TypeKind::Block {
                             ins: vec![TypeKind::Generic(a)],
                             outs: vec![TypeKind::Bool],
                         },
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(a)))],
-                )
+                    outs: vec![TypeKind::List(Box::new(TypeKind::Generic(a)))],
+                }
             }
             OpKind::Fold => {
                 let a = self.create_generic();
                 let b = self.create_generic();
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Fold,
+                    ins: vec![
                         TypeKind::Generic(b),
                         TypeKind::Block {
                             ins: vec![TypeKind::Generic(a), TypeKind::Generic(b)],
@@ -477,36 +629,38 @@ impl TypeChecker {
                         },
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
-                    vec![TypeKind::Generic(b)],
-                )
+                    outs: vec![TypeKind::Generic(b)],
+                }
             }
             OpKind::Foreach => {
                 let a = self.create_generic();
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Foreach,
+                    ins: vec![
                         TypeKind::Block {
                             ins: vec![TypeKind::Generic(a)],
                             outs: vec![],
                         },
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
-                    vec![],
-                )
+                    outs: vec![],
+                }
             }
             OpKind::Map => {
                 let a = self.create_generic();
                 let b = self.create_generic();
 
-                (
-                    vec![
+                TypedOp {
+                    kind: TypedOpKind::Map,
+                    ins: vec![
                         TypeKind::Block {
                             ins: vec![TypeKind::Generic(a)],
                             outs: vec![TypeKind::Generic(b)],
                         },
                         TypeKind::List(Box::new(TypeKind::Generic(a))),
                     ],
-                    vec![TypeKind::List(Box::new(TypeKind::Generic(b)))],
-                )
+                    outs: vec![TypeKind::List(Box::new(TypeKind::Generic(b)))],
+                }
             }
             OpKind::DumpStack => {
                 for (type_kind, span) in &self.type_stack {
@@ -516,16 +670,29 @@ impl TypeChecker {
                         span
                     );
                 }
-                (vec![], vec![])
+                TypedOp {
+                    kind: TypedOpKind::DumpStack,
+                    ins: vec![],
+                    outs: vec![],
+                }
             }
             OpKind::DefineFunction { identifier, body } => {
                 if let TokenKind::Identifier(name) = &identifier.kind {
                     if let OpKind::PushBlock(ops) = &body.kind {
-                        let (ins, outs) = self.get_block_signature(ops);
+                        let block = self.type_check_block(ops, span);
 
-                        self.functions.insert(name.clone(), (ins, outs));
+                        self.functions
+                            .insert(name.clone(), (block.ins.clone(), block.outs.clone()));
 
-                        (vec![], vec![]) //declaring a function doesn't affect the stack
+                        TypedOp {
+                            kind: TypedOpKind::DefineFunction {
+                                name: name.clone(),
+                                block: Box::new(block.clone()),
+                            },
+                            //declaring a function doesn't affect the stack
+                            ins: vec![],
+                            outs: vec![],
+                        }
                     } else {
                         unreachable!()
                     }
@@ -535,86 +702,98 @@ impl TypeChecker {
             }
             OpKind::Call(name) => {
                 match self.functions.get(name) {
-                    Some((ins, outs)) => (ins.clone(), outs.clone()),
+                    Some((ins, outs)) => TypedOp {
+                        kind: TypedOpKind::Call(name.clone()),
+                        ins: ins.clone(),
+                        outs: outs.clone(),
+                    },
                     None => {
                         self.diagnostics.push(Diagnostic::report_error(
                             format!("no such function `{}`", name),
                             span,
                         ));
-                        (vec![], vec![]) //return nothing to keep going
+                        //return bogus to keep going
+                        TypedOp {
+                            kind: TypedOpKind::Call(name.clone()),
+                            ins: vec![],
+                            outs: vec![],
+                        }
                     }
                 }
             }
-            OpKind::If => (
-                //TODO: allow any function that doesn't modify the typestack
-                //      needs varargs
-                vec![
-                    TypeKind::Block {
-                        ins: vec![],
-                        outs: vec![],
-                    },
-                    TypeKind::Bool,
-                ],
-                vec![],
-            ),
-            OpKind::Choice => {
-                //TODO: really should be using varargs generics, but this will do for now
-                //      Without varargs we cannot type check choice inside functions
-                let expected_fn = self.type_stack.last();
-                if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
-                    let expected_bool = &self.type_stack.get(self.type_stack.len() - 3);
-                    if let Some((TypeKind::Bool, _)) = expected_bool {
-                        let mut choice_ins = vec![
-                            TypeKind::Block {
-                                ins: ins.clone(),
-                                outs: outs.clone(),
-                            },
-                            TypeKind::Block {
-                                ins: ins.clone(),
-                                outs: outs.clone(),
-                            },
-                            TypeKind::Bool,
-                        ];
-                        choice_ins.extend(ins.clone());
-                        (choice_ins, outs.clone())
-                    } else {
-                        //TODO these diagnostics are bad, but it's the best I can do right now
-                        self.diagnostics.push(Diagnostic::report_error(
-                            "incorrect inputs to choice, expected bool".to_string(),
-                            span,
-                        ));
-                        (vec![], vec![])
-                    }
-                } else {
-                    self.diagnostics.push(Diagnostic::report_error(
-                        "incorrect inputs to choice, expected fn".to_string(),
-                        span,
-                    ));
-                    (vec![], vec![])
-                }
-            }
+            // OpKind::If => (
+            //     //TODO: allow any function that doesn't modify the typestack
+            //     //      needs varargs
+            //     vec![
+            //         TypeKind::Block {
+            //             ins: vec![],
+            //             outs: vec![],
+            //         },
+            //         TypeKind::Bool,
+            //     ],
+            //     vec![],
+            // ),
+            // OpKind::Choice => {
+            //     //TODO: really should be using varargs generics, but this will do for now
+            //     //      Without varargs we cannot type check choice inside functions
+            //     let expected_fn = self.type_stack.last();
+            //     if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
+            //         let expected_bool = &self.type_stack.get(self.type_stack.len() - 3);
+            //         if let Some((TypeKind::Bool, _)) = expected_bool {
+            //             let mut choice_ins = vec![
+            //                 TypeKind::Block {
+            //                     ins: ins.clone(),
+            //                     outs: outs.clone(),
+            //                 },
+            //                 TypeKind::Block {
+            //                     ins: ins.clone(),
+            //                     outs: outs.clone(),
+            //                 },
+            //                 TypeKind::Bool,
+            //             ];
+            //             choice_ins.extend(ins.clone());
+            //             (choice_ins, outs.clone())
+            //         } else {
+            //             //TODO these diagnostics are bad, but it's the best I can do right now
+            //             self.diagnostics.push(Diagnostic::report_error(
+            //                 "incorrect inputs to choice, expected bool".to_string(),
+            //                 span,
+            //             ));
+            //             (vec![], vec![])
+            //         }
+            //     } else {
+            //         self.diagnostics.push(Diagnostic::report_error(
+            //             "incorrect inputs to choice, expected fn".to_string(),
+            //             span,
+            //         ));
+            //         (vec![], vec![])
+            //     }
+            // }
+            _ => todo!(),
         }
     }
 
-    fn get_block_signature(&mut self, ops: &Vec<Op>) -> (Vec<TypeKind>, Vec<TypeKind>) {
+    fn type_check_block(&mut self, ops: &Vec<Op>, span: Span) -> TypedOp {
+        let mut typed_ops = Vec::new();
         let mut ins: Vec<TypeKind> = Vec::new();
         let mut outs: Vec<TypeKind> = Vec::new();
 
         for op in ops {
-            let (op_ins, op_outs) = self.get_signature(&op.kind, op.span);
+            let typed_op = self.type_check_op(&op.kind, span);
 
             // println!("  op: {:?}, op_ins: {:?}, op_outs: {:?}", op, op_ins, op_outs);
 
-            for op_in in op_ins {
+            for op_in in &typed_op.ins {
                 match outs.pop() {
-                    Some(out) => self.expect_type(&out, &op_in, op.span),
-                    None => ins.push(op_in),
+                    Some(out) => self.expect_type(&out, op_in, op.span),
+                    None => ins.push(op_in.clone()),
                 }
             }
 
-            for op_out in op_outs {
-                outs.push(op_out);
+            for op_out in &typed_op.outs {
+                outs.push(op_out.clone());
             }
+            typed_ops.push(typed_op);
         }
 
         let mut erased_ins = Vec::new();
@@ -658,6 +837,10 @@ impl TypeChecker {
                 _ => erased_outs.push(block_out),
             }
         }
-        (erased_ins, erased_outs)
+        TypedOp {
+            kind: TypedOpKind::PushBlock(typed_ops),
+            ins: erased_ins,
+            outs: erased_outs,
+        }
     }
 }
