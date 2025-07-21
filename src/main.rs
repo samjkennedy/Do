@@ -1,5 +1,6 @@
 use crate::emitter::FasmEmitter;
 use anyhow::{Context, Error, Result};
+use bytecode_interpreter::BytecodeInterpreter;
 use interpreter::Interpreter;
 use lexer::{Lexer, Token};
 use lowerer::Lowerer;
@@ -23,7 +24,7 @@ mod typechecker;
 fn main() -> Result<()> {
     let mut args = env::args().skip(1).peekable();
 
-    //TODO: this is an ass way to do args
+    //TODO: this is a stupid way to do args, use a lib to parse properly with usage
     match args.peek().map(|s| s.as_str()) {
         Some("-r") => {
             args.next(); // consume -r
@@ -39,6 +40,13 @@ fn main() -> Result<()> {
                 .next()
                 .ok_or_else(|| anyhow::anyhow!("Expected file path after -i"))?;
             interpret_file(&input_path)
+        }
+        Some("-b") => {
+            args.next(); // consume -i
+            let input_path = args
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("Expected file path after -i"))?;
+            interpret_bytecode(&input_path)
         }
         Some(path) if path.ends_with(".do") => {
             let input_path = args.next().unwrap();
@@ -86,6 +94,71 @@ fn interpret_file(input_path: &String) -> Result<(), Error> {
 
     let mut interpreter = Interpreter::new();
     interpreter.interpret(&ops);
+
+    Ok(())
+}
+
+fn interpret_bytecode(input_path: &String) -> Result<(), Error> {
+    let input = fs::read_to_string(input_path)
+        .with_context(|| format!("Failed to read input file `{}`", input_path))?;
+
+    let mut lexer = Lexer::new();
+
+    let tokens: Vec<Token> = lexer.lex(&input);
+
+    if !lexer.diagnostics.is_empty() {
+        for diagnostic in lexer.diagnostics {
+            diagnostic.display_diagnostic(input_path, &input);
+        }
+        return Ok(());
+    }
+
+    let mut parser = Parser::new();
+    let ops = parser.parse(&tokens);
+
+    if !parser.diagnostics.is_empty() {
+        for diagnostic in parser.diagnostics {
+            diagnostic.display_diagnostic(input_path, &input);
+        }
+        return Ok(());
+    }
+
+    let mut type_checker = TypeChecker::new(true);
+    let typed_ops = type_checker.type_check(&ops);
+
+    if !type_checker.diagnostics.is_empty() {
+        for diagnostic in type_checker.diagnostics {
+            diagnostic.display_diagnostic(input_path, &input);
+        }
+        return Ok(());
+    }
+
+    let mut lowerer = Lowerer::new();
+    let bytecode = lowerer.lower(&typed_ops);
+
+    //TODO: allow saving dob files
+    // // Derive output file names from input path
+    // let input_stem = Path::new(input_path)
+    //     .file_stem()
+    //     .and_then(|s| s.to_str())
+    //     .ok_or_else(|| anyhow::anyhow!("Invalid input file path"))?;
+    //
+    // let dob_file = format!("{}.dob", input_stem);
+    // {
+    //     let mut file = File::create(&dob_file)?;
+    //     for (_, function) in &bytecode {
+    //         for op in function {
+    //             for word in op.to_binary() {
+    //                 write!(file, "{:#04x} ", word)?;
+    //             }
+    //             writeln!(file)?;
+    //         }
+    //     }
+    // }
+
+    let mut bytecode_interpreter = BytecodeInterpreter::new();
+
+    bytecode_interpreter.interpret(&bytecode, &lowerer.constant_pool);
 
     Ok(())
 }

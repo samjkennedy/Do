@@ -1,4 +1,4 @@
-use crate::lowerer::OpCode;
+use crate::lowerer::ByteCodeInstruction;
 use std::fs::File;
 use std::io::Result;
 use std::io::Write;
@@ -12,7 +12,11 @@ impl FasmEmitter {
         FasmEmitter { out_file }
     }
 
-    pub fn emit(&mut self, program: &[(String, Vec<OpCode>)], constants: &[String]) -> Result<()> {
+    pub fn emit(
+        &mut self,
+        program: &[(String, Vec<ByteCodeInstruction>)],
+        constants: &[String],
+    ) -> Result<()> {
         self.emit_preamble()?;
 
         self.emit_helper_functions()?;
@@ -34,7 +38,7 @@ impl FasmEmitter {
             }
 
             for op in bytecode {
-                if let OpCode::Return = op {
+                if let ByteCodeInstruction::Return = op {
                     writeln!(self.out_file, "\tpop rax")?;
                     writeln!(self.out_file, "\tpop rbx")?; //restore volatile register
                 }
@@ -226,11 +230,11 @@ impl FasmEmitter {
         writeln!(self.out_file, "\tret")
     }
 
-    fn emit_op(&mut self, opcode: &OpCode, constants: &[String]) -> Result<()> {
+    fn emit_op(&mut self, opcode: &ByteCodeInstruction, constants: &[String]) -> Result<()> {
         writeln!(self.out_file, "; --- {:?} ---", opcode)?;
         match opcode {
-            OpCode::Push(value) => writeln!(self.out_file, "\tpush {}", value),
-            OpCode::NewList { length } => {
+            ByteCodeInstruction::Push(value) => writeln!(self.out_file, "\tpush {}", value),
+            ByteCodeInstruction::NewList { length } => {
                 //allocate memory for N+1 qwords
                 writeln!(self.out_file, "\tsub rsp, 32")?;
                 writeln!(self.out_file, "\tmov rcx, {}", (length + 1) * 8)?;
@@ -253,20 +257,20 @@ impl FasmEmitter {
 
                 //TODO: maybe have a refcount on the list, if it hits 0 free the memory
             }
-            OpCode::Pop => writeln!(self.out_file, "\tpop rax"),
-            OpCode::Dup => {
+            ByteCodeInstruction::Pop => writeln!(self.out_file, "\tpop rax"),
+            ByteCodeInstruction::Dup => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpush rax")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::Over => {
+            ByteCodeInstruction::Over => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tpush rbx")?;
                 writeln!(self.out_file, "\tpush rax")?;
                 writeln!(self.out_file, "\tpush rbx")
             }
-            OpCode::Rot => {
+            ByteCodeInstruction::Rot => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tpop rcx")?;
@@ -274,31 +278,31 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpush rax")?;
                 writeln!(self.out_file, "\tpush rcx")
             }
-            OpCode::Swap => {
+            ByteCodeInstruction::Swap => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tpush rax")?;
                 writeln!(self.out_file, "\tpush rbx")
             }
-            OpCode::Add => {
+            ByteCodeInstruction::Add => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tadd rax, rbx")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::Sub => {
+            ByteCodeInstruction::Sub => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tsub rbx, rax")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::Mul => {
+            ByteCodeInstruction::Mul => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\timul rax, rbx")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::Div => {
+            ByteCodeInstruction::Div => {
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tcqo")?;
@@ -306,7 +310,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpush rdx")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::Mod => {
+            ByteCodeInstruction::Mod => {
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tcqo")?;
@@ -314,7 +318,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpush rax")?;
                 writeln!(self.out_file, "\tpush rdx")
             }
-            OpCode::Eq => {
+            ByteCodeInstruction::Eq => {
                 writeln!(self.out_file, "\tmov rcx, 0")?;
                 writeln!(self.out_file, "\tmov rdx, 1")?;
                 writeln!(self.out_file, "\tpop rax")?;
@@ -323,7 +327,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tcmove rcx, rdx")?;
                 writeln!(self.out_file, "\tpush rcx")
             }
-            OpCode::Gt => {
+            ByteCodeInstruction::Gt => {
                 writeln!(self.out_file, "\tmov rcx, 0")?;
                 writeln!(self.out_file, "\tmov rdx, 1")?;
                 writeln!(self.out_file, "\tpop rax")?;
@@ -332,7 +336,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tcmovg rcx, rdx")?;
                 writeln!(self.out_file, "\tpush rcx")
             }
-            OpCode::GtEq => {
+            ByteCodeInstruction::GtEq => {
                 writeln!(self.out_file, "\tmov rcx, 0")?;
                 writeln!(self.out_file, "\tmov rdx, 1")?;
                 writeln!(self.out_file, "\tpop rax")?;
@@ -341,7 +345,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tcmovge rcx, rdx")?;
                 writeln!(self.out_file, "\tpush rcx")
             }
-            OpCode::Lt => {
+            ByteCodeInstruction::Lt => {
                 writeln!(self.out_file, "\tmov rcx, 0")?;
                 writeln!(self.out_file, "\tmov rdx, 1")?;
                 writeln!(self.out_file, "\tpop rax")?;
@@ -350,7 +354,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tcmovl rcx, rdx")?;
                 writeln!(self.out_file, "\tpush rcx")
             }
-            OpCode::LtEq => {
+            ByteCodeInstruction::LtEq => {
                 writeln!(self.out_file, "\tmov rcx, 0")?;
                 writeln!(self.out_file, "\tmov rdx, 1")?;
                 writeln!(self.out_file, "\tpop rax")?;
@@ -359,42 +363,42 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tcmovle rcx, rdx")?;
                 writeln!(self.out_file, "\tpush rcx")
             }
-            OpCode::Print => {
+            ByteCodeInstruction::Print => {
                 writeln!(self.out_file, "\tpop rcx")?;
                 writeln!(self.out_file, "\tcall print_intln")
             }
-            OpCode::PrintList => {
+            ByteCodeInstruction::PrintList => {
                 writeln!(self.out_file, "\tpop rcx")?;
                 writeln!(self.out_file, "\tcall print_list")
             }
 
-            OpCode::PushBlock { index } => {
+            ByteCodeInstruction::PushBlock { index } => {
                 writeln!(self.out_file, "\tlea rax, [block_{}]", index)?;
                 writeln!(self.out_file, "\tpush rax ; function pointer")
             }
-            OpCode::Load { index } => todo!(),
-            OpCode::Store { index } => todo!(),
-            OpCode::ListLen => {
+            ByteCodeInstruction::Load { index } => todo!(),
+            ByteCodeInstruction::Store { index } => todo!(),
+            ByteCodeInstruction::ListLen => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tmov rax, [rax]")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::ListGet => {
+            ByteCodeInstruction::ListGet => {
                 writeln!(self.out_file, "\tpop rax")?; //index
                 writeln!(self.out_file, "\tinc rax")?; //index+1
                 writeln!(self.out_file, "\tpop rbx")?; //list
                 writeln!(self.out_file, "\tmov rax, [rbx + rax*8]")?;
                 writeln!(self.out_file, "\tpush rax")
             }
-            OpCode::ListSet => {
+            ByteCodeInstruction::ListSet => {
                 writeln!(self.out_file, "\tpop rax")?; //value
                 writeln!(self.out_file, "\tpop rbx")?; //index
                 writeln!(self.out_file, "\tinc rbx")?; //index+1
                 writeln!(self.out_file, "\tpop rcx")?; //list
                 writeln!(self.out_file, "\tmov qword [rcx + rbx*8], rax")
             }
-            OpCode::Label(label) => writeln!(self.out_file, ".label_{}", label),
-            OpCode::Call {
+            ByteCodeInstruction::Label(label) => writeln!(self.out_file, ".label_{}", label),
+            ByteCodeInstruction::Call {
                 index,
                 in_count,
                 out_count,
@@ -418,15 +422,17 @@ impl FasmEmitter {
                 }
                 Ok(())
             }
-            OpCode::Jump { label } => writeln!(self.out_file, "\tjmp label_{}", label),
-            OpCode::JumpIfFalse { label } => writeln!(self.out_file, "\tjz label_{}", label),
-            OpCode::Map => {
+            ByteCodeInstruction::Jump { label } => writeln!(self.out_file, "\tjmp label_{}", label),
+            ByteCodeInstruction::JumpIfFalse { label } => {
+                writeln!(self.out_file, "\tjz label_{}", label)
+            }
+            ByteCodeInstruction::Map => {
                 writeln!(self.out_file, "\tpop rcx")?; //pop func into rcx
                 writeln!(self.out_file, "\tpop rdx")?; //pop list into rdx
                 writeln!(self.out_file, "\tcall map")?;
                 writeln!(self.out_file, "\tpush rax") //push resulting list onto the stack
             }
-            OpCode::Return => writeln!(self.out_file, "\tret"),
+            ByteCodeInstruction::Return => writeln!(self.out_file, "\tret"),
         }
     }
 
