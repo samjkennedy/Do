@@ -5,25 +5,18 @@ use std::collections::HashMap;
 pub enum ByteCodeInstruction {
     Push(usize),
     Pop,
-    NewList {
-        length: usize,
-    },
+    NewList,
     ListLen,
     ListGet,
-    ListSet,
-    PushBlock {
-        index: usize,
-    },
-    Load {
-        index: usize,
-    },
-    Store {
-        index: usize,
-    },
+    PushBlock { index: usize },
+    Load { index: usize },
+    Store { index: usize },
     Dup,
     Over,
     Rot,
     Swap,
+    Inc,
+    Dec,
     Add,
     Sub,
     Mul,
@@ -35,22 +28,13 @@ pub enum ByteCodeInstruction {
     LtEq,
     Eq,
     Print,
+    PrintBool,
     PrintList,
     Label(usize),
-    Call {
-        index: usize,
-        in_count: usize,
-        out_count: usize,
-    },
-    Jump {
-        label: usize,
-    },
-    JumpIfFalse {
-        label: usize,
-    },
+    Call { in_count: usize, out_count: usize },
+    Jump { label: usize },
+    JumpIfFalse { label: usize },
     Return,
-    //TODO: I don't think these should be bytecode intrinsics
-    Map,
 }
 
 impl ByteCodeInstruction {
@@ -58,10 +42,10 @@ impl ByteCodeInstruction {
         match self {
             ByteCodeInstruction::Push(_) => 0x01,
             ByteCodeInstruction::Pop => 0x02,
-            ByteCodeInstruction::NewList { .. } => 0x03,
+            ByteCodeInstruction::NewList => 0x03,
             ByteCodeInstruction::ListLen => 0x04,
             ByteCodeInstruction::ListGet => 0x05,
-            ByteCodeInstruction::ListSet => 0x06,
+            // ByteCodeInstruction::ListSet => 0x06,
             ByteCodeInstruction::PushBlock { .. } => 0x07,
             ByteCodeInstruction::Load { .. } => 0x08,
             ByteCodeInstruction::Store { .. } => 0x09,
@@ -86,7 +70,9 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Jump { .. } => 0x1C,
             ByteCodeInstruction::JumpIfFalse { .. } => 0x1D,
             ByteCodeInstruction::Return => 0x1E,
-            ByteCodeInstruction::Map => 0x1F,
+            ByteCodeInstruction::Inc => 0x1F,
+            ByteCodeInstruction::Dec => 0x20,
+            ByteCodeInstruction::PrintBool => 0x21,
         }
     }
 
@@ -94,10 +80,9 @@ impl ByteCodeInstruction {
         match self {
             ByteCodeInstruction::Push(value) => vec![self.get_opcode(), value],
             ByteCodeInstruction::Pop => vec![self.get_opcode()],
-            ByteCodeInstruction::NewList { length } => vec![self.get_opcode(), length],
+            ByteCodeInstruction::NewList => vec![self.get_opcode()],
             ByteCodeInstruction::ListLen => vec![self.get_opcode()],
             ByteCodeInstruction::ListGet => vec![self.get_opcode()],
-            ByteCodeInstruction::ListSet => vec![self.get_opcode()],
             ByteCodeInstruction::PushBlock { index } => vec![self.get_opcode(), index],
             ByteCodeInstruction::Load { index } => vec![self.get_opcode(), index],
             ByteCodeInstruction::Store { index } => vec![self.get_opcode(), index],
@@ -105,6 +90,8 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Over => vec![self.get_opcode()],
             ByteCodeInstruction::Rot => vec![self.get_opcode()],
             ByteCodeInstruction::Swap => vec![self.get_opcode()],
+            ByteCodeInstruction::Inc => vec![self.get_opcode()],
+            ByteCodeInstruction::Dec => vec![self.get_opcode()],
             ByteCodeInstruction::Add => vec![self.get_opcode()],
             ByteCodeInstruction::Sub => vec![self.get_opcode()],
             ByteCodeInstruction::Mul => vec![self.get_opcode()],
@@ -119,14 +106,13 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::PrintList => vec![self.get_opcode()],
             ByteCodeInstruction::Label(label) => vec![self.get_opcode(), label],
             ByteCodeInstruction::Call {
-                index,
                 in_count,
                 out_count,
-            } => vec![self.get_opcode(), index, in_count, out_count],
+            } => vec![self.get_opcode(), in_count, out_count],
             ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::Return => vec![self.get_opcode()],
-            ByteCodeInstruction::Map => vec![self.get_opcode()],
+            ByteCodeInstruction::PrintBool => vec![self.get_opcode()],
         }
     }
 
@@ -134,15 +120,10 @@ impl ByteCodeInstruction {
         match opcode {
             0x01 => (ByteCodeInstruction::Push(arguments[0]), 2), // opcode + 1 argument
             0x02 => (ByteCodeInstruction::Pop, 1),
-            0x03 => (
-                ByteCodeInstruction::NewList {
-                    length: arguments[0],
-                },
-                2,
-            ),
+            0x03 => (ByteCodeInstruction::NewList, 1),
             0x04 => (ByteCodeInstruction::ListLen, 1),
             0x05 => (ByteCodeInstruction::ListGet, 1),
-            0x06 => (ByteCodeInstruction::ListSet, 1),
+            // 0x06 => (ByteCodeInstruction::ListSet, 1),
             0x07 => (
                 ByteCodeInstruction::PushBlock {
                     index: arguments[0],
@@ -180,11 +161,10 @@ impl ByteCodeInstruction {
             0x1A => (ByteCodeInstruction::Label(arguments[0]), 2),
             0x1B => (
                 ByteCodeInstruction::Call {
-                    index: arguments[0],
-                    in_count: arguments[1],
-                    out_count: arguments[2],
+                    in_count: arguments[0],
+                    out_count: arguments[1],
                 },
-                4,
+                3,
             ),
             0x1C => (
                 ByteCodeInstruction::Jump {
@@ -199,7 +179,9 @@ impl ByteCodeInstruction {
                 2,
             ),
             0x1E => (ByteCodeInstruction::Return, 1),
-            0x1F => (ByteCodeInstruction::Map, 1),
+            0x1F => (ByteCodeInstruction::Inc, 1),
+            0x20 => (ByteCodeInstruction::Dec, 1),
+            0x21 => (ByteCodeInstruction::PrintBool, 1),
             _ => todo!("unhandled opcode {}", opcode),
         }
     }
@@ -231,7 +213,7 @@ impl Lowerer {
             result.push((name.clone(), fn_to_emit.clone()));
         }
 
-        result.push(("start".to_string(), bytecode));
+        result.push(("main".to_string(), bytecode));
         result
     }
 
@@ -253,27 +235,31 @@ impl Lowerer {
             TypedOpKind::PushList(elements) => {
                 let mut ops = Vec::new();
                 for element in elements.iter().rev() {
-                    //TODO: this is not right, need TypedOp to have a TypedOpKind so list element type info is not lost
-                    //      also needs to be recursive, if it were a List<TypedOpKind> could just do ops.extend(self.lower_op(element))
                     ops.extend(self.lower_op(element));
                 }
-                ops.push(ByteCodeInstruction::NewList {
-                    length: elements.len(),
-                });
+                ops.push(ByteCodeInstruction::Push(elements.len()));
+                ops.push(ByteCodeInstruction::NewList);
                 ops
             }
             TypedOpKind::PushBlock(ops) => {
-                let label = self.next_label();
+                let index = self.constant_pool.len();
 
                 let mut bytecode = self.lower_ops(ops);
                 bytecode.push(ByteCodeInstruction::Return);
 
                 self.fns_to_emit
-                    .insert(format!("block_{}", label), bytecode);
+                    .insert(format!("block_{}", index), bytecode);
 
-                vec![ByteCodeInstruction::PushBlock { index: label }]
+                self.constant_pool.insert(index, format!("block_{}", index));
+
+                vec![ByteCodeInstruction::PushBlock { index }]
             }
-            TypedOpKind::Dup => vec![ByteCodeInstruction::Dup],
+            TypedOpKind::Dup => {
+                if let TypeKind::List(_) = &op.ins[0] {
+                    return self.duplicate_list();
+                }
+                vec![ByteCodeInstruction::Dup]
+            }
             TypedOpKind::Over => vec![ByteCodeInstruction::Over],
             TypedOpKind::Rot => vec![ByteCodeInstruction::Rot],
             TypedOpKind::Swap => vec![ByteCodeInstruction::Swap],
@@ -290,10 +276,55 @@ impl Lowerer {
             TypedOpKind::Equals => vec![ByteCodeInstruction::Eq],
             TypedOpKind::Not => vec![ByteCodeInstruction::Push(0), ByteCodeInstruction::Eq],
             TypedOpKind::Map => {
-                vec![ByteCodeInstruction::Map]
+                let func_idx = self.next_const(format!("func_{}", self.constant_pool.len()));
+                let list_idx = self.next_const(format!("list_{}", self.constant_pool.len()));
+                let counter_idx = self.next_const(format!("counter_{}", self.constant_pool.len()));
+
+                let cond = self.next_label();
+                let end = self.next_label();
+
+                //[list_ptr func_ptr]
+                vec![
+                    ByteCodeInstruction::Store { index: func_idx },
+                    ByteCodeInstruction::Store { index: list_idx },
+                    //init counter with len
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    ByteCodeInstruction::Store { index: counter_idx },
+                    //init loop
+                    //Prepare loop
+                    ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: counter_idx },
+                    ByteCodeInstruction::Push(0),
+                    //Is counter > 0?
+                    ByteCodeInstruction::Gt,
+                    ByteCodeInstruction::JumpIfFalse { label: end },
+                    //Decrement the counter before performing the get
+                    ByteCodeInstruction::Load { index: counter_idx },
+                    ByteCodeInstruction::Dec,
+                    ByteCodeInstruction::Store { index: counter_idx },
+                    //Get list[counter]
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: counter_idx },
+                    ByteCodeInstruction::ListGet,
+                    //[el]
+                    ByteCodeInstruction::Load { index: func_idx },
+                    //[el func_ptr]
+                    ByteCodeInstruction::Call {
+                        in_count: 1,
+                        out_count: 1,
+                    },
+                    //['el...]
+                    ByteCodeInstruction::Jump { label: cond },
+                    ByteCodeInstruction::Label(end),
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    ByteCodeInstruction::NewList,
+                ]
             }
             TypedOpKind::Print => match &op.ins[0] {
                 TypeKind::List(_) => vec![ByteCodeInstruction::PrintList],
+                TypeKind::Bool => vec![ByteCodeInstruction::PrintBool],
                 _ => vec![ByteCodeInstruction::Print],
             },
             TypedOpKind::Len => vec![ByteCodeInstruction::ListLen],
@@ -314,23 +345,68 @@ impl Lowerer {
                     unreachable!()
                 }
             }
-            TypedOpKind::Call(name) => {
-                let index = self.constant_pool.iter().position(|n| n == name).unwrap();
-                let (ins, outs) = self.functions.get(index).unwrap();
-
+            TypedOpKind::Call => {
                 vec![ByteCodeInstruction::Call {
-                    index,
-                    in_count: ins.len(),
-                    out_count: outs.len(),
+                    in_count: op.ins.len(),
+                    out_count: op.outs.len(),
                 }]
             }
             _ => todo!("lowering {:?} is not yet implemented", op.kind),
         }
     }
 
+    //Helper method for the code to duplicate a list on the stack
+    fn duplicate_list(&mut self) -> Vec<ByteCodeInstruction> {
+        //[list_ptr func_ptr]
+        let cond = self.next_label();
+        let end = self.next_label();
+
+        let list_idx = self.next_const(format!("list_{}", self.constant_pool.len()));
+        let counter_idx = self.next_const(format!("counter_{}", self.constant_pool.len()));
+
+        vec![
+            //[list_ptr]
+            ByteCodeInstruction::Store { index: list_idx },
+            ByteCodeInstruction::Load { index: list_idx },
+            //Create counter starting at len to count down
+            ByteCodeInstruction::ListLen,
+            ByteCodeInstruction::Store { index: counter_idx },
+            //Prepare loop
+            ByteCodeInstruction::Label(cond),
+            ByteCodeInstruction::Load { index: counter_idx },
+            ByteCodeInstruction::Push(0),
+            //Is counter > 0?
+            ByteCodeInstruction::Gt,
+            ByteCodeInstruction::JumpIfFalse { label: end },
+            //Decrement the counter before performing the get
+            ByteCodeInstruction::Load { index: counter_idx },
+            ByteCodeInstruction::Dec,
+            ByteCodeInstruction::Store { index: counter_idx },
+            //Push list[len - counter] onto the stack
+            ByteCodeInstruction::Load { index: list_idx },
+            ByteCodeInstruction::Load { index: counter_idx },
+            ByteCodeInstruction::ListGet,
+            ByteCodeInstruction::Jump { label: cond },
+            ByteCodeInstruction::Label(end),
+            //Create new list of the same size from the elements now on the stack
+            ByteCodeInstruction::Load { index: list_idx },
+            ByteCodeInstruction::ListLen,
+            ByteCodeInstruction::NewList,
+            //Restore the stack to be [orig new]
+            ByteCodeInstruction::Load { index: list_idx },
+            ByteCodeInstruction::Swap,
+        ]
+    }
+
     fn next_label(&mut self) -> usize {
         let label = self.next_label;
         self.next_label += 1;
         label
+    }
+
+    fn next_const(&mut self, name: String) -> usize {
+        let index = self.constant_pool.len();
+        self.constant_pool.push(name);
+        index
     }
 }

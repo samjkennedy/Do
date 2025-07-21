@@ -4,7 +4,7 @@
   </picture> 
 </div>
 
-# Do Programming Language
+# The Do Programming Language
 
 Do is a stack-based, strongly typed, functional programming language designed around composition, inference, and lists. The
 concatenation of two programs is their composition.
@@ -59,7 +59,7 @@ $ do -i square.do
 [1 4 9 16 25]
 ```
 
-Compile a Do file to .exe (Highly unstable, currently only supports 64 bit windows):
+Compile a Do file to .exe (Highly unstable, currently only supports 64-bit windows):
 
 ```
 $ do square.do
@@ -121,12 +121,13 @@ operators in Do so far:
 | fold      | [a] fn(a b -> b) b -> b  | Left fold over list             |
 | foreach   | [a] fn(a -> ) ->         | Apply function to each element  |
 
-### Conditionals
+### Control Flow
 
 | Operation | Signature                                     | Description                                                        |
 |-----------|-----------------------------------------------|--------------------------------------------------------------------|
 | if        | bool fn(->) ->                                | Run block if condition is true                                     |
 | choice    | ... bool fn(... -> ...) fn(... -> ...) -> ... | If/else: choose one of two branches (\<cond> (then) (else) choice) |
+| return    | N/A                                           | Exits the current function, returning what's on the stack          |
 
 ### List Operations
 
@@ -176,4 +177,4 @@ operators in Do so far:
 
 - [ ] Recursion
 - [ ] Modules
-- [ ] WASM compilation
+- [ ] Native exe compilation

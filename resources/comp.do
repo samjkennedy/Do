@@ -2,3 +2,5 @@
 2 2 = print
 3 1 = print
 true false = print
+
+[true false true] print

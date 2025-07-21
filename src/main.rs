@@ -1,3 +1,4 @@
+use std::io::Write;
 use crate::emitter::FasmEmitter;
 use anyhow::{Context, Error, Result};
 use bytecode_interpreter::BytecodeInterpreter;
@@ -28,25 +29,35 @@ fn main() -> Result<()> {
     match args.peek().map(|s| s.as_str()) {
         Some("-r") => {
             args.next(); // consume -r
-            let input_path = args
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("Expected file path after -r"))?;
-            let remaining_args: Vec<String> = args.collect();
-            compile_file(&input_path, true, &remaining_args)
+            match args.peek().map(|s| s.as_str()) {
+                Some(path) if path.ends_with(".do") => {
+                    let input_path = args.next().unwrap();
+                    compile_file(&input_path, true, &[])
+                }
+                Some(_) => Err(anyhow::anyhow!("Expected .do file path")),
+                None => Err(anyhow::anyhow!("Unknown arguments")),
+            }
         }
         Some("-i") => {
             args.next(); // consume -i
-            let input_path = args
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("Expected file path after -i"))?;
-            interpret_file(&input_path)
+            match args.peek().map(|s| s.as_str()) {
+                Some(path) if path.ends_with(".do") => {
+                    let input_path = args.next().unwrap();
+                    interpret_file(&input_path)
+                }
+                Some(_) => Err(anyhow::anyhow!("Expected .do file path")),
+                None => Err(anyhow::anyhow!("Unknown arguments")),
+            }
         }
         Some("-b") => {
             args.next(); // consume -i
-            let input_path = args
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("Expected file path after -i"))?;
-            interpret_bytecode(&input_path)
+            match args.peek().map(|s| s.as_str()) {
+                Some(path) if path.ends_with(".dob") => {
+                    todo!("interpreting raw .dob files")
+                }
+                Some(_) => Err(anyhow::anyhow!("Expected .dob file path")),
+                None => Err(anyhow::anyhow!("Unknown arguments")),
+            }
         }
         Some(path) if path.ends_with(".do") => {
             let input_path = args.next().unwrap();
@@ -83,7 +94,7 @@ fn interpret_file(input_path: &String) -> Result<(), Error> {
     }
 
     let mut type_checker = TypeChecker::new(true);
-    type_checker.type_check(&ops);
+    let typed_ops = type_checker.type_check(&ops);
 
     if !type_checker.diagnostics.is_empty() {
         for diagnostic in type_checker.diagnostics {
@@ -92,8 +103,37 @@ fn interpret_file(input_path: &String) -> Result<(), Error> {
         return Ok(());
     }
 
-    let mut interpreter = Interpreter::new();
-    interpreter.interpret(&ops);
+    let mut lowerer = Lowerer::new();
+    let bytecode = lowerer.lower(&typed_ops);
+
+    //TODO: allow saving and interpreting straight from dob files
+    // // Derive output file names from input path
+    // let input_stem = Path::new(input_path)
+    //     .file_stem()
+    //     .and_then(|s| s.to_str())
+    //     .ok_or_else(|| anyhow::anyhow!("Invalid input file path"))?;
+    //
+    // let dob_file = format!("{}.dob", input_stem);
+    // {
+    //     let mut file = File::create(&dob_file)?;
+    //     let mut i = 0;
+    //     for (_, function) in &bytecode {
+    //         for op in function {
+    //             for word in op.to_binary() {
+    //                 write!(file, "{:04x} ", word)?;
+    //                 i += 1;
+    //                 if i == 8 {
+    //                     writeln!(file)?;
+    //                     i = 0;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    let mut bytecode_interpreter = BytecodeInterpreter::new();
+
+    bytecode_interpreter.interpret(&bytecode, &lowerer.constant_pool);
 
     Ok(())
 }
@@ -136,7 +176,7 @@ fn interpret_bytecode(input_path: &String) -> Result<(), Error> {
     let mut lowerer = Lowerer::new();
     let bytecode = lowerer.lower(&typed_ops);
 
-    //TODO: allow saving dob files
+    //TODO: allow saving and interpreting straight from dob files
     // // Derive output file names from input path
     // let input_stem = Path::new(input_path)
     //     .file_stem()
@@ -146,12 +186,17 @@ fn interpret_bytecode(input_path: &String) -> Result<(), Error> {
     // let dob_file = format!("{}.dob", input_stem);
     // {
     //     let mut file = File::create(&dob_file)?;
+    //     let mut i = 0;
     //     for (_, function) in &bytecode {
     //         for op in function {
     //             for word in op.to_binary() {
-    //                 write!(file, "{:#04x} ", word)?;
+    //                 write!(file, "{:04x} ", word)?;
+    //                 i += 1;
+    //                 if i == 8 {
+    //                     writeln!(file)?;
+    //                     i = 0;
+    //                 }
     //             }
-    //             writeln!(file)?;
     //         }
     //     }
     // }
@@ -224,8 +269,8 @@ fn compile_file(input_path: &String, run: bool, args: &[String]) -> Result<(), E
             .output()
             .expect("failed to execute fasm");
     }
-    
-    println!("Compiled to {}",  &exe_file);
+
+    println!("Compiled to {}", &exe_file);
 
     if run {
         let output = Command::new(format!("./{}", exe_file))
