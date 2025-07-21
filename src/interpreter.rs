@@ -1,10 +1,10 @@
+use crate::diagnostic::Diagnostic;
 use crate::lexer::TokenKind;
 use crate::parser::{Op, OpKind};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Rem, Sub};
-use crate::diagnostic::Diagnostic;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -273,9 +273,9 @@ impl Interpreter {
                     let a = self.stack.pop().unwrap();
                     let b = self.stack.pop().unwrap();
 
-                    self.stack.push(a.clone());
-                    self.stack.push(b);
+                    self.stack.push(b.clone());
                     self.stack.push(a);
+                    self.stack.push(b);
                 }
                 OpKind::Pop => {
                     self.stack.pop().unwrap();
