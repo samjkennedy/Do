@@ -1,6 +1,6 @@
 <div align="center">
   <picture>
-        <img src="logo.svg" width="50%" alt="The Do Programming Language">
+        <img src="logo.svg" width="20%" alt="The Do Programming Language">
   </picture> 
 </div>
 
