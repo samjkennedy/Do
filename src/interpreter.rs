@@ -444,7 +444,7 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
-                OpKind::Call(name) => {
+                OpKind::Identifier(name) => {
                     let ops = self.functions.get(name).unwrap().clone();
                     self.interpret(&ops);
                 }
@@ -480,6 +480,7 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
+                OpKind::Binding { .. } => todo!()
             }
         }
     }

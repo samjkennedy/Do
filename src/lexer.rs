@@ -43,6 +43,7 @@ pub enum TokenKind {
     FnKeyword,
     IfKeyword,
     ChoiceKeyword,
+    LetKeyword,
     Error(String),
 }
 
@@ -363,6 +364,10 @@ impl Lexer {
             },
             "choice" => Token {
                 kind: TokenKind::ChoiceKeyword,
+                span: Span { offset, length },
+            },
+            "let" => Token {
+                kind: TokenKind::LetKeyword,
                 span: Span { offset, length },
             },
             &_ => Token {

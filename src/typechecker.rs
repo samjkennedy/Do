@@ -56,6 +56,8 @@ pub enum TypedOpKind {
     DumpStack,
     DefineFunction { name: String, block: Box<TypedOp> },
     Call,
+    Binding { bindings: Vec<String>, block: Box<TypedOp> },
+    Value(String)
 }
 
 impl Display for TypeKind {
@@ -96,6 +98,7 @@ pub struct TypeChecker {
     erasures: Vec<Option<TypeKind>>,
     next_generic_index: usize,
     functions: HashMap<String, (Vec<TypeKind>, Vec<TypeKind>)>,
+    bindings: HashMap<String, TypeKind>,
 }
 
 impl TypeChecker {
@@ -107,6 +110,7 @@ impl TypeChecker {
             erasures: Vec::new(),
             next_generic_index: 0,
             functions: HashMap::new(),
+            bindings: HashMap::new(),
         }
     }
 
@@ -700,76 +704,79 @@ impl TypeChecker {
                     unreachable!()
                 }
             }
-            OpKind::Call(name) => {
-                match self.functions.get(name) {
-                    Some((ins, outs)) => TypedOp {
-                        kind: TypedOpKind::Call,
-                        ins: ins.clone(),
-                        outs: outs.clone(),
-                    },
-                    None => {
-                        self.diagnostics.push(Diagnostic::report_error(
-                            format!("no such function `{}`", name),
-                            span,
-                        ));
-                        //return bogus to keep going
+            OpKind::Identifier(name) => {
+                match self.bindings.get(name) {
+                    Some(type_kind) => {
                         TypedOp {
-                            kind: TypedOpKind::Call,
+                            kind: TypedOpKind::Value(name.clone()),
                             ins: vec![],
-                            outs: vec![],
+                            outs: vec![type_kind.clone()],
+                        }
+                    },
+                    None => match self.functions.get(name) {
+                        Some((ins, outs)) => TypedOp {
+                            kind: TypedOpKind::Call,
+                            ins: ins.clone(),
+                            outs: outs.clone(),
+                        },
+                        None => {
+                            self.diagnostics.push(Diagnostic::report_error(
+                                format!("no such identifier `{}` in scope", name),
+                                span,
+                            ));
+                            //return bogus to keep going
+                            TypedOp {
+                                kind: TypedOpKind::Call,
+                                ins: vec![],
+                                outs: vec![],
+                            }
                         }
                     }
                 }
             }
-            // OpKind::If => (
-            //     //TODO: allow any function that doesn't modify the typestack
-            //     //      needs varargs
-            //     vec![
-            //         TypeKind::Block {
-            //             ins: vec![],
-            //             outs: vec![],
-            //         },
-            //         TypeKind::Bool,
-            //     ],
-            //     vec![],
-            // ),
-            // OpKind::Choice => {
-            //     //TODO: really should be using varargs generics, but this will do for now
-            //     //      Without varargs we cannot type check choice inside functions
-            //     let expected_fn = self.type_stack.last();
-            //     if let Some((TypeKind::Block { ins, outs }, _)) = expected_fn {
-            //         let expected_bool = &self.type_stack.get(self.type_stack.len() - 3);
-            //         if let Some((TypeKind::Bool, _)) = expected_bool {
-            //             let mut choice_ins = vec![
-            //                 TypeKind::Block {
-            //                     ins: ins.clone(),
-            //                     outs: outs.clone(),
-            //                 },
-            //                 TypeKind::Block {
-            //                     ins: ins.clone(),
-            //                     outs: outs.clone(),
-            //                 },
-            //                 TypeKind::Bool,
-            //             ];
-            //             choice_ins.extend(ins.clone());
-            //             (choice_ins, outs.clone())
-            //         } else {
-            //             //TODO these diagnostics are bad, but it's the best I can do right now
-            //             self.diagnostics.push(Diagnostic::report_error(
-            //                 "incorrect inputs to choice, expected bool".to_string(),
-            //                 span,
-            //             ));
-            //             (vec![], vec![])
-            //         }
-            //     } else {
-            //         self.diagnostics.push(Diagnostic::report_error(
-            //             "incorrect inputs to choice, expected fn".to_string(),
-            //             span,
-            //         ));
-            //         (vec![], vec![])
-            //     }
-            // }
-            _ => todo!(),
+            OpKind::If => todo!(),
+            OpKind::Choice => todo!(),
+            OpKind::Binding { bindings, block } => {
+                let mut binding_identifiers = Vec::new();
+                for identifier in bindings.iter().rev() {
+                    if let TokenKind::Identifier(name) = &identifier.kind {
+                        match self.pop_type(identifier.span) {
+                            Some(type_kind) => {
+                                self.bindings.insert(name.clone(), type_kind);
+                                binding_identifiers.push(name.clone());
+                            }
+                            None => break
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+
+                if let OpKind::PushBlock(ops) = &block.kind {
+                    let block = self.type_check_block(ops, span);
+
+                    TypedOp {
+                        ins: block.ins.clone(),
+                        outs: block.outs.clone(),
+                        kind: TypedOpKind::Binding { bindings: binding_identifiers, block: Box::new(block) },
+                    }
+                } else {
+                    unreachable!()
+                }
+            }
+        }
+    }
+
+    fn pop_type(&mut self, span: Span) -> Option<TypeKind> {
+        match self.type_stack.pop() {
+            Some((type_kind, _)) => Some(type_kind),
+            None => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "expected value but stack was empty".to_string(),
+                    span,
+                ));
+                None
+            }
         }
     }
 

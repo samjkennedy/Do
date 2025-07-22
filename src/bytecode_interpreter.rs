@@ -1,4 +1,4 @@
-use crate::lowerer::ByteCodeInstruction;
+use crate::lowerer::{ByteCodeInstruction, StackFrame};
 use std::collections::HashMap;
 
 pub struct BytecodeInterpreter {
@@ -27,7 +27,7 @@ impl BytecodeInterpreter {
 
     pub fn interpret(
         &mut self,
-        program: &[(String, Vec<ByteCodeInstruction>)],
+        program: &[(String, StackFrame)],
         constants: &[String],
     ) {
         let mut functions = HashMap::new();
@@ -40,7 +40,7 @@ impl BytecodeInterpreter {
                 self.pc = self.rom.len();
             }
 
-            for instruction in function {
+            for instruction in &function.instructions {
                 if let ByteCodeInstruction::Label(label) = instruction {
                     self.labels.insert(*label, self.rom.len());
                 }
@@ -162,22 +162,22 @@ impl BytecodeInterpreter {
             ByteCodeInstruction::Gt => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b > a { 1 } else { 0 });
+                self.stack.push(if a > b { 1 } else { 0 });
             }
             ByteCodeInstruction::GtEq => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b >= a { 1 } else { 0 });
+                self.stack.push(if a >= b { 1 } else { 0 });
             }
             ByteCodeInstruction::Lt => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b < a { 1 } else { 0 });
+                self.stack.push(if a < b { 1 } else { 0 });
             }
             ByteCodeInstruction::LtEq => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b <= a { 1 } else { 0 });
+                self.stack.push(if a <= b { 1 } else { 0 });
             }
             ByteCodeInstruction::Eq => {
                 let a = self.stack.pop().unwrap();

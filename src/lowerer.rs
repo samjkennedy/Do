@@ -191,7 +191,14 @@ pub struct Lowerer {
     next_label: usize,
     pub constant_pool: Vec<String>,
     functions: Vec<(Vec<TypeKind>, Vec<TypeKind>)>,
+    bindings: HashMap<String, usize>,
     fns_to_emit: HashMap<String, Vec<ByteCodeInstruction>>,
+    locals_count: usize,
+}
+
+pub struct StackFrame {
+    pub instructions: Vec<ByteCodeInstruction>,
+    pub max_locals: usize,
 }
 
 impl Lowerer {
@@ -200,20 +207,38 @@ impl Lowerer {
             next_label: 0,
             constant_pool: Vec::new(),
             functions: Vec::new(),
+            bindings: HashMap::new(),
             fns_to_emit: HashMap::new(),
+            locals_count: 0,
         }
     }
 
-    pub fn lower(&mut self, ops: &[TypedOp]) -> Vec<(String, Vec<ByteCodeInstruction>)> {
-        let mut result: Vec<(String, Vec<ByteCodeInstruction>)> = Vec::new();
+    pub fn lower(&mut self, ops: &[TypedOp]) -> Vec<(String, StackFrame)> {
+        let mut result: Vec<(String, StackFrame)> = Vec::new();
 
         let bytecode = self.lower_ops(ops);
+        let frame = StackFrame {
+            instructions: bytecode,
+            max_locals: self.locals_count,
+        };
+
+        // println!("stack frame max locals: {}", frame.max_locals);
+
+        self.locals_count = 0;
+        self.bindings =  HashMap::new();
 
         for (name, fn_to_emit) in &self.fns_to_emit {
-            result.push((name.clone(), fn_to_emit.clone()));
+            let frame = StackFrame {
+                instructions: fn_to_emit.clone(),
+                max_locals: self.locals_count,
+            };
+            self.locals_count = 0;
+            self.bindings =  HashMap::new();
+
+            result.push((name.clone(), frame));
         }
 
-        result.push(("main".to_string(), bytecode));
+        result.push(("main".to_string(), frame));
         result
     }
 
@@ -294,8 +319,8 @@ impl Lowerer {
                     //init loop
                     //Prepare loop
                     ByteCodeInstruction::Label(cond),
-                    ByteCodeInstruction::Load { index: counter_idx },
                     ByteCodeInstruction::Push(0),
+                    ByteCodeInstruction::Load { index: counter_idx },
                     //Is counter > 0?
                     ByteCodeInstruction::Gt,
                     ByteCodeInstruction::JumpIfFalse { label: end },
@@ -351,6 +376,28 @@ impl Lowerer {
                     out_count: op.outs.len(),
                 }]
             }
+            TypedOpKind::Binding { bindings, block } => {
+                let mut bytecode = Vec::new();
+
+                for binding in bindings {
+                    let local = self.next_local();
+                    bytecode.push(ByteCodeInstruction::Store { index: local });
+                    self.bindings.insert(binding.clone(), local);
+                }
+
+                if let TypedOpKind::PushBlock(ops) = &block.kind {
+                    for op in ops {
+                        bytecode.extend(self.lower_op(op));
+                    }
+                }
+
+                bytecode
+            }
+            TypedOpKind::Value(name) => {
+                let binding = self.bindings.get(name).unwrap();
+
+                vec![ByteCodeInstruction::Load { index: *binding }]
+            }
             _ => todo!("lowering {:?} is not yet implemented", op.kind),
         }
     }
@@ -361,8 +408,8 @@ impl Lowerer {
         let cond = self.next_label();
         let end = self.next_label();
 
-        let list_idx = self.next_const(format!("list_{}", self.constant_pool.len()));
-        let counter_idx = self.next_const(format!("counter_{}", self.constant_pool.len()));
+        let list_idx = self.next_local();
+        let counter_idx = self.next_local();
 
         vec![
             //[list_ptr]
@@ -373,8 +420,8 @@ impl Lowerer {
             ByteCodeInstruction::Store { index: counter_idx },
             //Prepare loop
             ByteCodeInstruction::Label(cond),
-            ByteCodeInstruction::Load { index: counter_idx },
             ByteCodeInstruction::Push(0),
+            ByteCodeInstruction::Load { index: counter_idx },
             //Is counter > 0?
             ByteCodeInstruction::Gt,
             ByteCodeInstruction::JumpIfFalse { label: end },
@@ -402,6 +449,12 @@ impl Lowerer {
         let label = self.next_label;
         self.next_label += 1;
         label
+    }
+
+    fn next_local(&mut self) -> usize {
+        let local = self.locals_count;
+        self.locals_count += 1;
+        local
     }
 
     fn next_const(&mut self, name: String) -> usize {
