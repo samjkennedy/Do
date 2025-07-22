@@ -55,7 +55,7 @@ pub enum TypedOpKind {
     Map,
     DumpStack,
     DefineFunction { name: String, block: Box<TypedOp> },
-    Call(String),
+    Call,
 }
 
 impl Display for TypeKind {
@@ -703,7 +703,7 @@ impl TypeChecker {
             OpKind::Call(name) => {
                 match self.functions.get(name) {
                     Some((ins, outs)) => TypedOp {
-                        kind: TypedOpKind::Call(name.clone()),
+                        kind: TypedOpKind::Call,
                         ins: ins.clone(),
                         outs: outs.clone(),
                     },
@@ -714,7 +714,7 @@ impl TypeChecker {
                         ));
                         //return bogus to keep going
                         TypedOp {
-                            kind: TypedOpKind::Call(name.clone()),
+                            kind: TypedOpKind::Call,
                             ins: vec![],
                             outs: vec![],
                         }
