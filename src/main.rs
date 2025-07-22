@@ -1,8 +1,6 @@
-use std::io::Write;
 use crate::emitter::FasmEmitter;
 use anyhow::{Context, Error, Result};
 use bytecode_interpreter::BytecodeInterpreter;
-use interpreter::Interpreter;
 use lexer::{Lexer, Token};
 use lowerer::Lowerer;
 use parser::Parser;
@@ -264,13 +262,13 @@ fn compile_file(input_path: &String, run: bool, args: &[String]) -> Result<(), E
     }
 
     {
-        Command::new("fasm")
+        let output = Command::new("fasm")
             .arg(&asm_file)
             .output()
             .expect("failed to execute fasm");
+        print!("{}", String::from_utf8(output.stdout)?);
+        eprint!("{}", String::from_utf8(output.stderr)?);
     }
-
-    println!("Compiled to {}", &exe_file);
 
     if run {
         let output = Command::new(format!("./{}", exe_file))
