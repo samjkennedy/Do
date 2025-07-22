@@ -59,7 +59,7 @@ $ do -i square.do
 [1 4 9 16 25]
 ```
 
-Compile a Do file to .exe (Highly unstable, currently only supports 64-bit windows):
+Compile a Do file to .exe (Highly unstable, requires fasm installed, currently only supports 64-bit windows):
 
 ```
 $ do square.do
@@ -144,6 +144,18 @@ operators in Do so far:
 |-----------|-----------|------------------------------------|
 | print     | a ->      | Print top of stack                 |
 | ???       | --        | Debug prints the current typestack |
+
+### Bindings
+
+Stack values can be bound to identifiers with the `let` keyword:
+
+```
+4 5 let a b {
+    a print     // prints 4
+    b print     // prints 5
+    a b + print // prints 9
+}
+```
 
 ## Example Programs
 

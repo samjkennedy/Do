@@ -214,7 +214,7 @@ impl Parser {
                 kind: OpKind::Or,
                 span: token.span,
             }),
-            TokenKind::OpenParenthesis => self.parse_block(&token, tokens),
+            TokenKind::OpenParenthesis => self.parse_block(&token, tokens, TokenKind::CloseParenthesis),
             TokenKind::CloseParenthesis => {
                 self.diagnostics.push(Diagnostic::report_error(
                     "unexpected token ')'".to_string(),
@@ -261,20 +261,34 @@ impl Parser {
                 let mut bindings = Vec::new();
 
                 while self.cursor < tokens.len()
-                    && tokens[self.cursor].kind != TokenKind::OpenParenthesis
+                    && tokens[self.cursor].kind != TokenKind::OpenCurly
                 {
                     let identifier = self.expect_identifier(tokens, tokens[self.cursor].span)?;
 
                     bindings.push(identifier);
                 }
-                let open_paren = self.expect_token(&TokenKind::OpenParenthesis, tokens, tokens[self.cursor].span)?;
-                let block = self.parse_block(&open_paren, tokens)?;
+                let open_curly = self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                let block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
                 let span = Span::from_to(token.span, block.span);
 
                 Some(Op {
                     kind: OpKind::Binding {bindings, block: Box::new(block)},
                     span,
                 })
+            }
+            TokenKind::OpenCurly => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "unexpected token '{'".to_string(),
+                    token.span,
+                ));
+                None
+            }
+            TokenKind::CloseCurly => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "unexpected token '}'".to_string(),
+                    token.span,
+                ));
+                None
             }
             TokenKind::DupKeyword => Some(Op {
                 kind: OpKind::Dup,
@@ -348,7 +362,7 @@ impl Parser {
                 let identifier = self.expect_identifier(tokens, token.span)?;
                 let open_parenthesis =
                     self.expect_token(&TokenKind::OpenParenthesis, tokens, token.span)?;
-                let body = self.parse_block(&open_parenthesis, tokens)?;
+                let body = self.parse_block(&open_parenthesis, tokens, TokenKind::CloseParenthesis)?;
 
                 let span = Span::from_to(identifier.span, body.span);
 
@@ -376,10 +390,10 @@ impl Parser {
         }
     }
 
-    fn parse_block(&mut self, open_paren: &Token, tokens: &[Token]) -> Option<Op> {
+    fn parse_block(&mut self, open_paren: &Token, tokens: &[Token], terminal: TokenKind) -> Option<Op> {
         let mut ops = Vec::new();
 
-        while self.cursor < tokens.len() && tokens[self.cursor].kind != TokenKind::CloseParenthesis
+        while self.cursor < tokens.len() && tokens[self.cursor].kind != terminal
         {
             ops.push(self.parse_op(tokens)?);
         }

@@ -257,7 +257,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tsub rbx, rax")?;
-                writeln!(self.out_file, "\tpush rax")
+                writeln!(self.out_file, "\tpush rbx")
             }
             ByteCodeInstruction::Mul => {
                 writeln!(self.out_file, "\tpop rax")?;

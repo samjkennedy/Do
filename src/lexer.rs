@@ -12,6 +12,8 @@ pub enum TokenKind {
     Percent,
     OpenParenthesis,
     CloseParenthesis,
+    OpenCurly,
+    CloseCurly,
     OpenAngle,
     OpenAngleEquals,
     CloseAngle,
@@ -101,6 +103,8 @@ impl Lexer {
                 '%' => self.lex_token(c, TokenKind::Percent),
                 '(' => self.lex_token(c, TokenKind::OpenParenthesis),
                 ')' => self.lex_token(c, TokenKind::CloseParenthesis),
+                '{' => self.lex_token(c, TokenKind::OpenCurly),
+                '}' => self.lex_token(c, TokenKind::CloseCurly),
                 '<' => self.lex_multichar_token(
                     input,
                     c,
