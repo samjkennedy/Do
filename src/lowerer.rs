@@ -409,6 +409,56 @@ impl Lowerer {
                     ByteCodeInstruction::NewList,
                 ]
             }
+            TypedOpKind::Fold => {
+                let func_idx = self.next_local();
+                let list_idx = self.next_local();
+                let index_idx = self.next_local();
+                let acc_idx = self.next_local();
+
+                let cond = self.next_label();
+                let end = self.next_label();
+
+                //[list_ptr acc func_ptr]
+                vec![
+                    ByteCodeInstruction::Store { index: func_idx },
+                    ByteCodeInstruction::Store { index: acc_idx },
+                    ByteCodeInstruction::Store { index: list_idx },
+                    //init index with len
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //init loop
+                    //Prepare loop
+                    ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Push(0),
+                    //Is index > 0?
+                    ByteCodeInstruction::Gt,
+                    ByteCodeInstruction::JumpIfFalse { label: end },
+                    //Decrement the index before performing the get
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Dec,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //Get list[index]
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::ListGet,
+                    //Get accumulator
+                    ByteCodeInstruction::Load { index: acc_idx },
+                    //[el acc]
+                    ByteCodeInstruction::Load { index: func_idx },
+                    //[el acc func_ptr]
+                    ByteCodeInstruction::Call {
+                        in_count: 2,
+                        out_count: 1,
+                    },
+                    //['el...]
+                    ByteCodeInstruction::Store { index: acc_idx },
+                    ByteCodeInstruction::Jump { label: cond },
+                    ByteCodeInstruction::Label(end),
+                    ByteCodeInstruction::Load { index: acc_idx },
+                ]
+            }
             TypedOpKind::Print => match &op.ins[0] {
                 TypeKind::List(_) => vec![ByteCodeInstruction::PrintList],
                 TypeKind::Bool => vec![ByteCodeInstruction::PrintBool],
