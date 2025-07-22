@@ -18,9 +18,7 @@ impl FasmEmitter {
         constants: &[String],
     ) -> Result<()> {
         self.emit_preamble()?;
-
         self.emit_helper_functions()?;
-        self.emit_built_in_functions()?;
 
         for (name, bytecode) in program {
             writeln!(self.out_file, "{}:", name)?;
@@ -74,11 +72,6 @@ impl FasmEmitter {
         self.emit_print_intln_function()?;
         self.emit_print_int_function()?;
         self.emit_print_list_function()?;
-        Ok(())
-    }
-
-    fn emit_built_in_functions(&mut self) -> Result<()> {
-        self.emit_map_function()?;
         Ok(())
     }
 
