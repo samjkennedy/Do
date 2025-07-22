@@ -40,9 +40,10 @@ pub enum OpKind {
     Map,
     DumpStack,
     DefineFunction { identifier: Token, body: Box<Op> },
-    Call(String),
+    Identifier(String),
     If,
     Choice,
+    Binding { bindings: Vec<Token>, block: Box<Op> },
 }
 
 #[derive(Debug, Clone)]
@@ -114,9 +115,10 @@ impl Display for Op {
                     unreachable!()
                 }
             }
-            OpKind::Call(name) => write!(f, "{}", name),
+            OpKind::Identifier(name) => write!(f, "{}", name),
             OpKind::If => write!(f, "if"),
             OpKind::Choice => write!(f, "choice"),
+            OpKind::Binding { .. } => write!(f, ""),
         }
     }
 }
@@ -255,6 +257,25 @@ impl Parser {
                 ));
                 None
             }
+            TokenKind::LetKeyword => {
+                let mut bindings = Vec::new();
+
+                while self.cursor < tokens.len()
+                    && tokens[self.cursor].kind != TokenKind::OpenParenthesis
+                {
+                    let identifier = self.expect_identifier(tokens, tokens[self.cursor].span)?;
+
+                    bindings.push(identifier);
+                }
+                let open_paren = self.expect_token(&TokenKind::OpenParenthesis, tokens, tokens[self.cursor].span)?;
+                let block = self.parse_block(&open_paren, tokens)?;
+                let span = Span::from_to(token.span, block.span);
+
+                Some(Op {
+                    kind: OpKind::Binding {bindings, block: Box::new(block)},
+                    span,
+                })
+            }
             TokenKind::DupKeyword => Some(Op {
                 kind: OpKind::Dup,
                 span: token.span,
@@ -340,7 +361,7 @@ impl Parser {
                 })
             }
             TokenKind::Identifier(identifier) => Some(Op {
-                kind: OpKind::Call(identifier),
+                kind: OpKind::Identifier(identifier),
                 span: token.span,
             }),
             TokenKind::IfKeyword => Some(Op {

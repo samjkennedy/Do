@@ -191,6 +191,7 @@ pub struct Lowerer {
     next_label: usize,
     pub constant_pool: Vec<String>,
     functions: Vec<(Vec<TypeKind>, Vec<TypeKind>)>,
+    bindings: HashMap<String, usize>,
     fns_to_emit: HashMap<String, Vec<ByteCodeInstruction>>,
     locals_count: usize,
 }
@@ -206,6 +207,7 @@ impl Lowerer {
             next_label: 0,
             constant_pool: Vec::new(),
             functions: Vec::new(),
+            bindings: HashMap::new(),
             fns_to_emit: HashMap::new(),
             locals_count: 0,
         }
@@ -220,9 +222,10 @@ impl Lowerer {
             max_locals: self.locals_count,
         };
 
-        println!("stack frame max locals: {}", frame.max_locals);
+        // println!("stack frame max locals: {}", frame.max_locals);
 
         self.locals_count = 0;
+        self.bindings =  HashMap::new();
 
         for (name, fn_to_emit) in &self.fns_to_emit {
             let frame = StackFrame {
@@ -230,6 +233,7 @@ impl Lowerer {
                 max_locals: self.locals_count,
             };
             self.locals_count = 0;
+            self.bindings =  HashMap::new();
 
             result.push((name.clone(), frame));
         }
@@ -371,6 +375,28 @@ impl Lowerer {
                     in_count: op.ins.len(),
                     out_count: op.outs.len(),
                 }]
+            }
+            TypedOpKind::Binding { bindings, block } => {
+                let mut bytecode = Vec::new();
+
+                for binding in bindings {
+                    let local = self.next_local();
+                    bytecode.push(ByteCodeInstruction::Store { index: local });
+                    self.bindings.insert(binding.clone(), local);
+                }
+
+                if let TypedOpKind::PushBlock(ops) = &block.kind {
+                    for op in ops {
+                        bytecode.extend(self.lower_op(op));
+                    }
+                }
+
+                bytecode
+            }
+            TypedOpKind::Value(name) => {
+                let binding = self.bindings.get(name).unwrap();
+
+                vec![ByteCodeInstruction::Load { index: *binding }]
             }
             _ => todo!("lowering {:?} is not yet implemented", op.kind),
         }

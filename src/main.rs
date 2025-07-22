@@ -266,7 +266,7 @@ fn compile_file(input_path: &String, run: bool, args: &[String]) -> Result<(), E
             .arg(&asm_file)
             .output()
             .expect("failed to execute fasm");
-        print!("{}", String::from_utf8(output.stdout)?);
+        // print!("{}", String::from_utf8(output.stdout)?);
         eprint!("{}", String::from_utf8(output.stderr)?);
     }
 

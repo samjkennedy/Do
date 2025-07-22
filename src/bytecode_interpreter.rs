@@ -162,22 +162,22 @@ impl BytecodeInterpreter {
             ByteCodeInstruction::Gt => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b > a { 1 } else { 0 });
+                self.stack.push(if a > b { 1 } else { 0 });
             }
             ByteCodeInstruction::GtEq => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b >= a { 1 } else { 0 });
+                self.stack.push(if a >= b { 1 } else { 0 });
             }
             ByteCodeInstruction::Lt => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b < a { 1 } else { 0 });
+                self.stack.push(if a < b { 1 } else { 0 });
             }
             ByteCodeInstruction::LtEq => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if b <= a { 1 } else { 0 });
+                self.stack.push(if a <= b { 1 } else { 0 });
             }
             ByteCodeInstruction::Eq => {
                 let a = self.stack.pop().unwrap();
