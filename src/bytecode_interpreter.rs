@@ -25,11 +25,7 @@ impl BytecodeInterpreter {
         }
     }
 
-    pub fn interpret(
-        &mut self,
-        program: &[(String, StackFrame)],
-        constants: &[String],
-    ) {
+    pub fn interpret(&mut self, program: &[(String, StackFrame)], constants: &[String]) {
         let mut functions = HashMap::new();
 
         for (name, function) in program {

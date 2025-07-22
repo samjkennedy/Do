@@ -54,10 +54,16 @@ pub enum TypedOpKind {
     Len,
     Map,
     DumpStack,
-    DefineFunction { name: String, block: Box<TypedOp> },
+    DefineFunction {
+        name: String,
+        block: Box<TypedOp>,
+    },
     Call,
-    Binding { bindings: Vec<String>, block: Box<TypedOp> },
-    Value(String)
+    Binding {
+        bindings: Vec<String>,
+        body: Vec<TypedOp>,
+    },
+    Value(String),
 }
 
 impl Display for TypeKind {
@@ -121,20 +127,7 @@ impl TypeChecker {
             let typed_op = self.type_check_op(&op.kind, op.span);
 
             // println!("  ins: {:?}, outs: {:?}", ins, outs);
-
-            for input in typed_op.ins.clone() {
-                match self.type_stack.pop() {
-                    Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
-                    None => self.diagnostics.push(Diagnostic::report_error(
-                        format!("Expected {} but stack was empty", input),
-                        op.span,
-                    )),
-                }
-            }
-
-            for output in typed_op.outs.clone() {
-                self.type_stack.push((output, op.span));
-            }
+            self.resolve_type_stack(op, &typed_op);
 
             typed_ops.push(TypedOp {
                 kind: typed_op.kind,
@@ -706,12 +699,10 @@ impl TypeChecker {
             }
             OpKind::Identifier(name) => {
                 match self.bindings.get(name) {
-                    Some(type_kind) => {
-                        TypedOp {
-                            kind: TypedOpKind::Value(name.clone()),
-                            ins: vec![],
-                            outs: vec![type_kind.clone()],
-                        }
+                    Some(type_kind) => TypedOp {
+                        kind: TypedOpKind::Value(name.clone()),
+                        ins: vec![],
+                        outs: vec![type_kind.clone()],
                     },
                     None => match self.functions.get(name) {
                         Some((ins, outs)) => TypedOp {
@@ -731,7 +722,7 @@ impl TypeChecker {
                                 outs: vec![],
                             }
                         }
-                    }
+                    },
                 }
             }
             OpKind::If => todo!(),
@@ -745,7 +736,7 @@ impl TypeChecker {
                                 self.bindings.insert(name.clone(), type_kind);
                                 binding_identifiers.push(name.clone());
                             }
-                            None => break
+                            None => break,
                         }
                     } else {
                         unreachable!()
@@ -753,17 +744,44 @@ impl TypeChecker {
                 }
 
                 if let OpKind::PushBlock(ops) = &block.kind {
-                    let block = self.type_check_block(ops, span);
+                    let mut typed_ops = Vec::new();
+
+                    for op in ops {
+                        let typed_op = self.type_check_op(&op.kind, op.span);
+
+                        self.resolve_type_stack(op, &typed_op);
+
+                        typed_ops.push(typed_op);
+                    }
 
                     TypedOp {
-                        ins: block.ins.clone(),
-                        outs: block.outs.clone(),
-                        kind: TypedOpKind::Binding { bindings: binding_identifiers, block: Box::new(block) },
+                        ins: vec![],
+                        outs: vec![],
+                        kind: TypedOpKind::Binding {
+                            bindings: binding_identifiers,
+                            body: typed_ops,
+                        },
                     }
                 } else {
                     unreachable!()
                 }
             }
+        }
+    }
+
+    fn resolve_type_stack(&mut self, op: &Op, typed_op: &TypedOp) {
+        for input in typed_op.ins.clone() {
+            match self.type_stack.pop() {
+                Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
+                None => self.diagnostics.push(Diagnostic::report_error(
+                    format!("Expected {} but stack was empty", input),
+                    op.span,
+                )),
+            }
+        }
+
+        for output in typed_op.outs.clone() {
+            self.type_stack.push((output, op.span));
         }
     }
 

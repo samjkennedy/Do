@@ -10,21 +10,19 @@ pub struct FasmEmitter {
 
 impl FasmEmitter {
     pub fn new(out_file: File) -> Self {
-        FasmEmitter { labels: 0, out_file }
+        FasmEmitter {
+            labels: 0,
+            out_file,
+        }
     }
 
-    pub fn emit(
-        &mut self,
-        program: &[(String, StackFrame)],
-        constants: &[String],
-    ) -> Result<()> {
+    pub fn emit(&mut self, program: &[(String, StackFrame)], constants: &[String]) -> Result<()> {
         self.emit_preamble()?;
         self.emit_helper_functions()?;
 
         for (name, frame) in program {
             writeln!(self.out_file, "{}:", name)?;
             if name == "main" {
-
                 //subtract from rsp the number of locals
                 writeln!(self.out_file, "push rbp")?;
                 writeln!(self.out_file, "mov rbp, rsp")?;
@@ -390,7 +388,9 @@ impl FasmEmitter {
                 }
                 Ok(())
             }
-            ByteCodeInstruction::Jump { label } => writeln!(self.out_file, "\tjmp .label_{}", label),
+            ByteCodeInstruction::Jump { label } => {
+                writeln!(self.out_file, "\tjmp .label_{}", label)
+            }
             ByteCodeInstruction::JumpIfFalse { label } => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\ttest rax, rax")?;

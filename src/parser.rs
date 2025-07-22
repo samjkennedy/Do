@@ -39,11 +39,17 @@ pub enum OpKind {
     Len,
     Map,
     DumpStack,
-    DefineFunction { identifier: Token, body: Box<Op> },
+    DefineFunction {
+        identifier: Token,
+        body: Box<Op>,
+    },
     Identifier(String),
     If,
     Choice,
-    Binding { bindings: Vec<Token>, block: Box<Op> },
+    Binding {
+        bindings: Vec<Token>,
+        block: Box<Op>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -214,7 +220,9 @@ impl Parser {
                 kind: OpKind::Or,
                 span: token.span,
             }),
-            TokenKind::OpenParenthesis => self.parse_block(&token, tokens, TokenKind::CloseParenthesis),
+            TokenKind::OpenParenthesis => {
+                self.parse_block(&token, tokens, TokenKind::CloseParenthesis)
+            }
             TokenKind::CloseParenthesis => {
                 self.diagnostics.push(Diagnostic::report_error(
                     "unexpected token ')'".to_string(),
@@ -260,19 +268,22 @@ impl Parser {
             TokenKind::LetKeyword => {
                 let mut bindings = Vec::new();
 
-                while self.cursor < tokens.len()
-                    && tokens[self.cursor].kind != TokenKind::OpenCurly
+                while self.cursor < tokens.len() && tokens[self.cursor].kind != TokenKind::OpenCurly
                 {
                     let identifier = self.expect_identifier(tokens, tokens[self.cursor].span)?;
 
                     bindings.push(identifier);
                 }
-                let open_curly = self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                let open_curly =
+                    self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
                 let block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
                 let span = Span::from_to(token.span, block.span);
 
                 Some(Op {
-                    kind: OpKind::Binding {bindings, block: Box::new(block)},
+                    kind: OpKind::Binding {
+                        bindings,
+                        block: Box::new(block),
+                    },
                     span,
                 })
             }
@@ -362,7 +373,8 @@ impl Parser {
                 let identifier = self.expect_identifier(tokens, token.span)?;
                 let open_parenthesis =
                     self.expect_token(&TokenKind::OpenParenthesis, tokens, token.span)?;
-                let body = self.parse_block(&open_parenthesis, tokens, TokenKind::CloseParenthesis)?;
+                let body =
+                    self.parse_block(&open_parenthesis, tokens, TokenKind::CloseParenthesis)?;
 
                 let span = Span::from_to(identifier.span, body.span);
 
@@ -390,11 +402,15 @@ impl Parser {
         }
     }
 
-    fn parse_block(&mut self, open_paren: &Token, tokens: &[Token], terminal: TokenKind) -> Option<Op> {
+    fn parse_block(
+        &mut self,
+        open_paren: &Token,
+        tokens: &[Token],
+        terminal: TokenKind,
+    ) -> Option<Op> {
         let mut ops = Vec::new();
 
-        while self.cursor < tokens.len() && tokens[self.cursor].kind != terminal
-        {
+        while self.cursor < tokens.len() && tokens[self.cursor].kind != terminal {
             ops.push(self.parse_op(tokens)?);
         }
 

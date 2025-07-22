@@ -225,7 +225,7 @@ impl Lowerer {
         // println!("stack frame max locals: {}", frame.max_locals);
 
         self.locals_count = 0;
-        self.bindings =  HashMap::new();
+        self.bindings = HashMap::new();
 
         for (name, fn_to_emit) in &self.fns_to_emit {
             let frame = StackFrame {
@@ -233,7 +233,7 @@ impl Lowerer {
                 max_locals: self.locals_count,
             };
             self.locals_count = 0;
-            self.bindings =  HashMap::new();
+            self.bindings = HashMap::new();
 
             result.push((name.clone(), frame));
         }
@@ -376,7 +376,7 @@ impl Lowerer {
                     out_count: op.outs.len(),
                 }]
             }
-            TypedOpKind::Binding { bindings, block } => {
+            TypedOpKind::Binding { bindings, body } => {
                 let mut bytecode = Vec::new();
 
                 for binding in bindings {
@@ -385,10 +385,8 @@ impl Lowerer {
                     self.bindings.insert(binding.clone(), local);
                 }
 
-                if let TypedOpKind::PushBlock(ops) = &block.kind {
-                    for op in ops {
-                        bytecode.extend(self.lower_op(op));
-                    }
+                for op in body {
+                    bytecode.extend(self.lower_op(op));
                 }
 
                 bytecode

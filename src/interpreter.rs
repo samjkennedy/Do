@@ -480,7 +480,7 @@ impl Interpreter {
                         unreachable!()
                     }
                 }
-                OpKind::Binding { .. } => todo!()
+                OpKind::Binding { .. } => todo!(),
             }
         }
     }
