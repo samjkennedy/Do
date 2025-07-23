@@ -38,6 +38,9 @@ impl BytecodeInterpreter {
 
             for instruction in &function.instructions {
                 if let ByteCodeInstruction::Label(label) = instruction {
+                    if label >= &self.labels.len() {
+                        self.labels.extend(vec![0; label - self.labels.len()]);
+                    }
                     self.labels.insert(*label, self.rom.len());
                 }
                 for word in instruction.to_binary() {
