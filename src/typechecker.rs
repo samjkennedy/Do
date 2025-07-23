@@ -58,7 +58,7 @@ pub enum TypedOpKind {
         name: String,
         block: Box<TypedOp>,
     },
-    Call,
+    Call(String),
     Binding {
         bindings: Vec<String>,
         body: Vec<TypedOp>,
@@ -105,6 +105,7 @@ pub struct TypeChecker {
     next_generic_index: usize,
     functions: HashMap<String, (Vec<TypeKind>, Vec<TypeKind>)>,
     bindings: HashMap<String, TypeKind>,
+    in_block: bool
 }
 
 impl TypeChecker {
@@ -117,6 +118,7 @@ impl TypeChecker {
             next_generic_index: 0,
             functions: HashMap::new(),
             bindings: HashMap::new(),
+            in_block: false
         }
     }
 
@@ -706,7 +708,7 @@ impl TypeChecker {
                     },
                     None => match self.functions.get(name) {
                         Some((ins, outs)) => TypedOp {
-                            kind: TypedOpKind::Call,
+                            kind: TypedOpKind::Call(name.clone()),
                             ins: ins.clone(),
                             outs: outs.clone(),
                         },
@@ -717,7 +719,7 @@ impl TypeChecker {
                             ));
                             //return bogus to keep going
                             TypedOp {
-                                kind: TypedOpKind::Call,
+                                kind: TypedOpKind::Call(name.clone()),
                                 ins: vec![],
                                 outs: vec![],
                             }
@@ -788,7 +790,10 @@ impl TypeChecker {
     fn pop_type(&mut self, span: Span) -> Option<TypeKind> {
         match self.type_stack.pop() {
             Some((type_kind, _)) => Some(type_kind),
-            None => {
+            None => if self.in_block {
+                let generic = self.create_generic();
+                Some(TypeKind::Generic(generic))
+            } else {
                 self.diagnostics.push(Diagnostic::report_error(
                     "expected value but stack was empty".to_string(),
                     span,
@@ -802,6 +807,9 @@ impl TypeChecker {
         let mut typed_ops = Vec::new();
         let mut ins: Vec<TypeKind> = Vec::new();
         let mut outs: Vec<TypeKind> = Vec::new();
+        
+        let was_in_block = self.in_block;
+        self.in_block = true;
 
         for op in ops {
             let typed_op = self.type_check_op(&op.kind, span);
@@ -821,6 +829,8 @@ impl TypeChecker {
             typed_ops.push(typed_op);
         }
 
+        self.in_block = was_in_block;
+        
         let mut erased_ins = Vec::new();
         for block_in in ins {
             match block_in {

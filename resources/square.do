@@ -1,4 +1,4 @@
-[1 2 3 4 5]
-    (dup *) map
-    (1 +) map
-    print
+fn square (dup *)
+fn add_one (1 +)
+
+5 square add_one print

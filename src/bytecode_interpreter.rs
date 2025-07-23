@@ -201,10 +201,7 @@ impl BytecodeInterpreter {
                 }
                 println!("]");
             }
-            ByteCodeInstruction::Call {
-                in_count: _,
-                out_count: _,
-            } => {
+            ByteCodeInstruction::Call => {
                 let func = self.stack.pop().unwrap();
                 let name = &constants[func];
                 let addr = functions.get(name).unwrap();

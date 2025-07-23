@@ -19,11 +19,6 @@ print
     }
 }
 
-//Somehow adding some let bindings has made this example work
-[1 2 3 4 5]
-    (dup *) map
-    print
-
 (dup *) [5 6 7 8 9 10] let f l {
     l f map
 }

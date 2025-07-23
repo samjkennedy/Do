@@ -31,7 +31,7 @@ pub enum ByteCodeInstruction {
     PrintBool,
     PrintList,
     Label(usize),
-    Call { in_count: usize, out_count: usize },
+    Call,
     Jump { label: usize },
     JumpIfFalse { label: usize },
     Return,
@@ -105,10 +105,7 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Print => vec![self.get_opcode()],
             ByteCodeInstruction::PrintList => vec![self.get_opcode()],
             ByteCodeInstruction::Label(label) => vec![self.get_opcode(), label],
-            ByteCodeInstruction::Call {
-                in_count,
-                out_count,
-            } => vec![self.get_opcode(), in_count, out_count],
+            ByteCodeInstruction::Call => vec![self.get_opcode()],
             ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::Return => vec![self.get_opcode()],
@@ -159,13 +156,7 @@ impl ByteCodeInstruction {
             0x18 => (ByteCodeInstruction::Print, 1),
             0x19 => (ByteCodeInstruction::PrintList, 1),
             0x1A => (ByteCodeInstruction::Label(arguments[0]), 2),
-            0x1B => (
-                ByteCodeInstruction::Call {
-                    in_count: arguments[0],
-                    out_count: arguments[1],
-                },
-                3,
-            ),
+            0x1B => (ByteCodeInstruction::Call, 1),
             0x1C => (
                 ByteCodeInstruction::Jump {
                     label: arguments[0],
@@ -335,10 +326,7 @@ impl Lowerer {
                     //[el]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el func_ptr]
-                    ByteCodeInstruction::Call {
-                        in_count: 1,
-                        out_count: 1,
-                    },
+                    ByteCodeInstruction::Call,
                     //['el...]
                     ByteCodeInstruction::Jump { label: cond },
                     ByteCodeInstruction::Label(end),
@@ -386,10 +374,7 @@ impl Lowerer {
                     //[el]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el func_ptr]
-                    ByteCodeInstruction::Call {
-                        in_count: 1,
-                        out_count: 1,
-                    },
+                    ByteCodeInstruction::Call,
                     //[true/false...]
                     //Jump back to cond if predicate failed
                     ByteCodeInstruction::JumpIfFalse { label: cond },
@@ -448,10 +433,7 @@ impl Lowerer {
                     //[el acc]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el acc func_ptr]
-                    ByteCodeInstruction::Call {
-                        in_count: 2,
-                        out_count: 1,
-                    },
+                    ByteCodeInstruction::Call,
                     //['el...]
                     ByteCodeInstruction::Store { index: acc_idx },
                     ByteCodeInstruction::Jump { label: cond },
@@ -482,11 +464,9 @@ impl Lowerer {
                     unreachable!()
                 }
             }
-            TypedOpKind::Call => {
-                vec![ByteCodeInstruction::Call {
-                    in_count: op.ins.len(),
-                    out_count: op.outs.len(),
-                }]
+            TypedOpKind::Call(name) => {
+                let index = self.constant_pool.iter().position(|n| n == name).unwrap();
+                vec![ByteCodeInstruction::Push(index), ByteCodeInstruction::Call]
             }
             TypedOpKind::Binding { bindings, body } => {
                 let mut bytecode = Vec::new();
