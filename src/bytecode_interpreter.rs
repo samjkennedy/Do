@@ -25,11 +25,7 @@ impl BytecodeInterpreter {
         }
     }
 
-    pub fn interpret(
-        &mut self,
-        program: &[(String, StackFrame)],
-        constants: &[String],
-    ) {
+    pub fn interpret(&mut self, program: &[(String, StackFrame)], constants: &[String]) {
         let mut functions = HashMap::new();
 
         for (name, function) in program {
@@ -42,6 +38,9 @@ impl BytecodeInterpreter {
 
             for instruction in &function.instructions {
                 if let ByteCodeInstruction::Label(label) = instruction {
+                    if label >= &self.labels.len() {
+                        self.labels.extend(vec![0; label - self.labels.len()]);
+                    }
                     self.labels.insert(*label, self.rom.len());
                 }
                 for word in instruction.to_binary() {
@@ -162,22 +161,22 @@ impl BytecodeInterpreter {
             ByteCodeInstruction::Gt => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if a > b { 1 } else { 0 });
+                self.stack.push(if b > a { 1 } else { 0 });
             }
             ByteCodeInstruction::GtEq => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if a >= b { 1 } else { 0 });
+                self.stack.push(if b >= a { 1 } else { 0 });
             }
             ByteCodeInstruction::Lt => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if a < b { 1 } else { 0 });
+                self.stack.push(if b < a { 1 } else { 0 });
             }
             ByteCodeInstruction::LtEq => {
                 let a = self.stack.pop().unwrap();
                 let b = self.stack.pop().unwrap();
-                self.stack.push(if a <= b { 1 } else { 0 });
+                self.stack.push(if b <= a { 1 } else { 0 });
             }
             ByteCodeInstruction::Eq => {
                 let a = self.stack.pop().unwrap();
@@ -205,10 +204,7 @@ impl BytecodeInterpreter {
                 }
                 println!("]");
             }
-            ByteCodeInstruction::Call {
-                in_count: _,
-                out_count: _,
-            } => {
+            ByteCodeInstruction::Call => {
                 let func = self.stack.pop().unwrap();
                 let name = &constants[func];
                 let addr = functions.get(name).unwrap();

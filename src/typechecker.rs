@@ -4,6 +4,7 @@ use crate::parser::{Op, OpKind};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::iter::zip;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeKind {
@@ -54,10 +55,20 @@ pub enum TypedOpKind {
     Len,
     Map,
     DumpStack,
-    DefineFunction { name: String, block: Box<TypedOp> },
-    Call,
-    Binding { bindings: Vec<String>, block: Box<TypedOp> },
-    Value(String)
+    DefineFunction {
+        name: String,
+        block: Box<TypedOp>,
+    },
+    Call(String),
+    Binding {
+        bindings: Vec<String>,
+        body: Vec<TypedOp>,
+    },
+    Value(String),
+    If {
+        body: Vec<TypedOp>,
+        else_body: Option<Vec<TypedOp>>,
+    },
 }
 
 impl Display for TypeKind {
@@ -99,6 +110,7 @@ pub struct TypeChecker {
     next_generic_index: usize,
     functions: HashMap<String, (Vec<TypeKind>, Vec<TypeKind>)>,
     bindings: HashMap<String, TypeKind>,
+    in_block: bool,
 }
 
 impl TypeChecker {
@@ -111,6 +123,7 @@ impl TypeChecker {
             next_generic_index: 0,
             functions: HashMap::new(),
             bindings: HashMap::new(),
+            in_block: false,
         }
     }
 
@@ -121,20 +134,7 @@ impl TypeChecker {
             let typed_op = self.type_check_op(&op.kind, op.span);
 
             // println!("  ins: {:?}, outs: {:?}", ins, outs);
-
-            for input in typed_op.ins.clone() {
-                match self.type_stack.pop() {
-                    Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
-                    None => self.diagnostics.push(Diagnostic::report_error(
-                        format!("Expected {} but stack was empty", input),
-                        op.span,
-                    )),
-                }
-            }
-
-            for output in typed_op.outs.clone() {
-                self.type_stack.push((output, op.span));
-            }
+            self.resolve_type_stack(op, &typed_op);
 
             typed_ops.push(TypedOp {
                 kind: typed_op.kind,
@@ -411,7 +411,7 @@ impl TypeChecker {
                     },
                 }
             }
-            OpKind::PushBlock(ops) => {
+            OpKind::PushFunction(ops) => {
                 let typed_block = self.type_check_block(ops, span);
                 TypedOp {
                     kind: typed_block.kind,
@@ -682,7 +682,7 @@ impl TypeChecker {
             }
             OpKind::DefineFunction { identifier, body } => {
                 if let TokenKind::Identifier(name) = &identifier.kind {
-                    if let OpKind::PushBlock(ops) = &body.kind {
+                    if let OpKind::PushFunction(ops) = &body.kind {
                         let block = self.type_check_block(ops, span);
 
                         self.functions
@@ -706,16 +706,14 @@ impl TypeChecker {
             }
             OpKind::Identifier(name) => {
                 match self.bindings.get(name) {
-                    Some(type_kind) => {
-                        TypedOp {
-                            kind: TypedOpKind::Value(name.clone()),
-                            ins: vec![],
-                            outs: vec![type_kind.clone()],
-                        }
+                    Some(type_kind) => TypedOp {
+                        kind: TypedOpKind::Value(name.clone()),
+                        ins: vec![],
+                        outs: vec![type_kind.clone()],
                     },
                     None => match self.functions.get(name) {
                         Some((ins, outs)) => TypedOp {
-                            kind: TypedOpKind::Call,
+                            kind: TypedOpKind::Call(name.clone()),
                             ins: ins.clone(),
                             outs: outs.clone(),
                         },
@@ -726,39 +724,185 @@ impl TypeChecker {
                             ));
                             //return bogus to keep going
                             TypedOp {
-                                kind: TypedOpKind::Call,
+                                kind: TypedOpKind::Call(name.clone()),
                                 ins: vec![],
                                 outs: vec![],
                             }
                         }
-                    }
+                    },
                 }
             }
-            OpKind::If => todo!(),
-            OpKind::Choice => todo!(),
-            OpKind::Binding { bindings, block } => {
+            OpKind::If { body, else_body } => match else_body {
+                Some(else_body) => match self.pop_type(span) {
+                    Some((TypeKind::Bool, bool_span)) => {
+                        let mut typed_ops = Vec::new();
+                        for op in body {
+                            let typed_op = self.type_check_op(&op.kind, op.span);
+
+                            self.resolve_type_stack(op, &typed_op);
+
+                            typed_ops.push(typed_op);
+                        }
+                        let checked_body = self.type_check_block(body, span);
+                        let checked_else_body = self.type_check_block(else_body, span);
+
+                        self.check_op_symmetrical(span, &checked_body);
+                        self.check_op_symmetrical(span, &checked_else_body);
+
+                        for (body_in, else_in) in zip(&checked_body.ins, &checked_else_body.ins) {
+                            self.expect_type(body_in, else_in, span);
+                        }
+                        for (body_out, else_out) in zip(&checked_body.outs, &checked_else_body.outs)
+                        {
+                            self.expect_type(body_out, else_out, span);
+                        }
+
+                        if let TypedOpKind::PushBlock(typed_body_ops) = &checked_body.kind {
+                            if let TypedOpKind::PushBlock(typed_else_body_ops) =
+                                &checked_else_body.kind
+                            {
+                                self.type_stack.push((TypeKind::Bool, bool_span));
+
+                                let mut ins = vec![TypeKind::Bool];
+                                ins.extend(checked_body.ins);
+                                TypedOp {
+                                    ins,
+                                    outs: checked_body.outs,
+                                    kind: TypedOpKind::If {
+                                        body: typed_body_ops.clone(),
+                                        else_body: Some(typed_else_body_ops.clone()),
+                                    },
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    Some((type_kind, span)) => {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            format!("expected {} but got {}", TypeKind::Bool, type_kind),
+                            span,
+                        ));
+                        TypedOp {
+                            ins: vec![TypeKind::Bool],
+                            outs: vec![],
+                            kind: TypedOpKind::If {
+                                body: vec![],
+                                else_body: Some(vec![]),
+                            },
+                        }
+                    }
+                    None => {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            format!("expected {} but stack was empty", TypeKind::Bool),
+                            span,
+                        ));
+                        TypedOp {
+                            ins: vec![TypeKind::Bool],
+                            outs: vec![],
+                            kind: TypedOpKind::If {
+                                body: vec![],
+                                else_body: Some(vec![]),
+                            },
+                        }
+                    }
+                },
+                None => match self.pop_type(span) {
+                    Some((TypeKind::Bool, bool_span)) => {
+                        let mut typed_ops = Vec::new();
+                        for op in body {
+                            let typed_op = self.type_check_op(&op.kind, op.span);
+
+                            self.resolve_type_stack(op, &typed_op);
+
+                            typed_ops.push(typed_op);
+                        }
+                        let checked_body = self.type_check_block(body, span);
+                        self.check_op_symmetrical(span, &checked_body);
+
+                        if let TypedOpKind::PushBlock(typed_ops) = &checked_body.kind {
+                            self.type_stack.push((TypeKind::Bool, bool_span));
+
+                            let mut ins = vec![TypeKind::Bool];
+                            ins.extend(checked_body.ins);
+                            TypedOp {
+                                ins,
+                                outs: checked_body.outs,
+                                kind: TypedOpKind::If {
+                                    body: typed_ops.clone(),
+                                    else_body: None,
+                                },
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    Some((type_kind, span)) => {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            format!("expected {} but got {}", TypeKind::Bool, type_kind),
+                            span,
+                        ));
+                        TypedOp {
+                            ins: vec![TypeKind::Bool],
+                            outs: vec![],
+                            kind: TypedOpKind::If {
+                                body: vec![],
+                                else_body: None,
+                            },
+                        }
+                    }
+                    None => {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            format!("expected {} but stack was empty", TypeKind::Bool),
+                            span,
+                        ));
+                        TypedOp {
+                            ins: vec![TypeKind::Bool],
+                            outs: vec![],
+                            kind: TypedOpKind::If {
+                                body: vec![],
+                                else_body: None,
+                            },
+                        }
+                    }
+                },
+            },
+            OpKind::Binding { bindings, body } => {
                 let mut binding_identifiers = Vec::new();
                 for identifier in bindings.iter().rev() {
                     if let TokenKind::Identifier(name) = &identifier.kind {
                         match self.pop_type(identifier.span) {
-                            Some(type_kind) => {
+                            Some((type_kind, _)) => {
                                 self.bindings.insert(name.clone(), type_kind);
                                 binding_identifiers.push(name.clone());
                             }
-                            None => break
+                            None => break,
                         }
                     } else {
                         unreachable!()
                     }
                 }
 
-                if let OpKind::PushBlock(ops) = &block.kind {
-                    let block = self.type_check_block(ops, span);
+                if let OpKind::PushFunction(ops) = &body.kind {
+                    let mut typed_ops = Vec::new();
+
+                    for op in ops {
+                        let typed_op = self.type_check_op(&op.kind, op.span);
+
+                        self.resolve_type_stack(op, &typed_op);
+
+                        typed_ops.push(typed_op);
+                    }
 
                     TypedOp {
-                        ins: block.ins.clone(),
-                        outs: block.outs.clone(),
-                        kind: TypedOpKind::Binding { bindings: binding_identifiers, block: Box::new(block) },
+                        ins: vec![],
+                        outs: vec![],
+                        kind: TypedOpKind::Binding {
+                            bindings: binding_identifiers,
+                            body: typed_ops,
+                        },
                     }
                 } else {
                     unreachable!()
@@ -767,15 +911,78 @@ impl TypeChecker {
         }
     }
 
-    fn pop_type(&mut self, span: Span) -> Option<TypeKind> {
-        match self.type_stack.pop() {
-            Some((type_kind, _)) => Some(type_kind),
-            None => {
+    fn check_op_symmetrical(&mut self, span: Span, op: &TypedOp) {
+        if op.ins.len() != op.outs.len() {
+            self.diagnostics.push(Diagnostic::report_error(
+                format!(
+                    "expected symmetrical function, but got [{} -- {}]",
+                    op.ins
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    op.outs
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                ),
+                span,
+            ))
+        }
+
+        for (block_in, block_out) in zip(&op.ins, &op.outs) {
+            if block_in != block_out {
                 self.diagnostics.push(Diagnostic::report_error(
-                    "expected value but stack was empty".to_string(),
+                    format!(
+                        "expected symmetrical function, but got [{} -- {}]",
+                        op.ins
+                            .iter()
+                            .map(|t| t.to_string())
+                            .collect::<Vec<String>>()
+                            .join(" "),
+                        op.outs
+                            .iter()
+                            .map(|t| t.to_string())
+                            .collect::<Vec<String>>()
+                            .join(" ")
+                    ),
                     span,
-                ));
-                None
+                ))
+            }
+        }
+    }
+
+    fn resolve_type_stack(&mut self, op: &Op, typed_op: &TypedOp) {
+        for input in typed_op.ins.clone() {
+            match self.type_stack.pop() {
+                Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
+                None => self.diagnostics.push(Diagnostic::report_error(
+                    format!("Expected {} but stack was empty", input),
+                    op.span,
+                )),
+            }
+        }
+
+        for output in typed_op.outs.clone() {
+            self.type_stack.push((output, op.span));
+        }
+    }
+
+    fn pop_type(&mut self, span: Span) -> Option<(TypeKind, Span)> {
+        match self.type_stack.pop() {
+            Some((type_kind, span)) => Some((type_kind, span)),
+            None => {
+                if self.in_block {
+                    let generic = self.create_generic();
+                    Some((TypeKind::Generic(generic), span))
+                } else {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        "expected value but stack was empty".to_string(),
+                        span,
+                    ));
+                    None
+                }
             }
         }
     }
@@ -784,6 +991,9 @@ impl TypeChecker {
         let mut typed_ops = Vec::new();
         let mut ins: Vec<TypeKind> = Vec::new();
         let mut outs: Vec<TypeKind> = Vec::new();
+
+        let was_in_block = self.in_block;
+        self.in_block = true;
 
         for op in ops {
             let typed_op = self.type_check_op(&op.kind, span);
@@ -802,6 +1012,8 @@ impl TypeChecker {
             }
             typed_ops.push(typed_op);
         }
+
+        self.in_block = was_in_block;
 
         let mut erased_ins = Vec::new();
         for block_in in ins {

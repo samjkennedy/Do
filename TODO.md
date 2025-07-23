@@ -9,4 +9,4 @@
 - [ ] Structs + Enums
 - [ ] Recursion
 - [ ] Modules/Imports/FFI?
-- [ ] Compilation (WASM?)
+- [ ] Compilation (fasm, wasm)

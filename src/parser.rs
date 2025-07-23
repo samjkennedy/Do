@@ -7,7 +7,7 @@ pub enum OpKind {
     PushBool(bool),
     PushInt(i64),
     PushList(Vec<Op>),
-    PushBlock(Vec<Op>),
+    PushFunction(Vec<Op>),
     Plus,
     Minus,
     Multiply,
@@ -39,11 +39,19 @@ pub enum OpKind {
     Len,
     Map,
     DumpStack,
-    DefineFunction { identifier: Token, body: Box<Op> },
+    DefineFunction {
+        identifier: Token,
+        body: Box<Op>,
+    },
     Identifier(String),
-    If,
-    Choice,
-    Binding { bindings: Vec<Token>, block: Box<Op> },
+    If {
+        body: Vec<Op>,
+        else_body: Option<Vec<Op>>,
+    },
+    Binding {
+        bindings: Vec<Token>,
+        body: Box<Op>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -67,7 +75,7 @@ impl Display for Op {
                 }
                 write!(f, "]")
             }
-            OpKind::PushBlock(block) => {
+            OpKind::PushFunction(block) => {
                 write!(f, "(")?;
                 for (i, op) in block.iter().enumerate() {
                     write!(f, "{}", op)?;
@@ -116,8 +124,7 @@ impl Display for Op {
                 }
             }
             OpKind::Identifier(name) => write!(f, "{}", name),
-            OpKind::If => write!(f, "if"),
-            OpKind::Choice => write!(f, "choice"),
+            OpKind::If { .. } => todo!(),
             OpKind::Binding { .. } => write!(f, ""),
         }
     }
@@ -214,7 +221,9 @@ impl Parser {
                 kind: OpKind::Or,
                 span: token.span,
             }),
-            TokenKind::OpenParenthesis => self.parse_block(&token, tokens),
+            TokenKind::OpenParenthesis => {
+                self.parse_block(&token, tokens, TokenKind::CloseParenthesis)
+            }
             TokenKind::CloseParenthesis => {
                 self.diagnostics.push(Diagnostic::report_error(
                     "unexpected token ')'".to_string(),
@@ -260,21 +269,38 @@ impl Parser {
             TokenKind::LetKeyword => {
                 let mut bindings = Vec::new();
 
-                while self.cursor < tokens.len()
-                    && tokens[self.cursor].kind != TokenKind::OpenParenthesis
+                while self.cursor < tokens.len() && tokens[self.cursor].kind != TokenKind::OpenCurly
                 {
                     let identifier = self.expect_identifier(tokens, tokens[self.cursor].span)?;
 
                     bindings.push(identifier);
                 }
-                let open_paren = self.expect_token(&TokenKind::OpenParenthesis, tokens, tokens[self.cursor].span)?;
-                let block = self.parse_block(&open_paren, tokens)?;
+                let open_curly =
+                    self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                let block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
                 let span = Span::from_to(token.span, block.span);
 
                 Some(Op {
-                    kind: OpKind::Binding {bindings, block: Box::new(block)},
+                    kind: OpKind::Binding {
+                        bindings,
+                        body: Box::new(block),
+                    },
                     span,
                 })
+            }
+            TokenKind::OpenCurly => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "unexpected token '{'".to_string(),
+                    token.span,
+                ));
+                None
+            }
+            TokenKind::CloseCurly => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "unexpected token '}'".to_string(),
+                    token.span,
+                ));
+                None
             }
             TokenKind::DupKeyword => Some(Op {
                 kind: OpKind::Dup,
@@ -348,7 +374,8 @@ impl Parser {
                 let identifier = self.expect_identifier(tokens, token.span)?;
                 let open_parenthesis =
                     self.expect_token(&TokenKind::OpenParenthesis, tokens, token.span)?;
-                let body = self.parse_block(&open_parenthesis, tokens)?;
+                let body =
+                    self.parse_block(&open_parenthesis, tokens, TokenKind::CloseParenthesis)?;
 
                 let span = Span::from_to(identifier.span, body.span);
 
@@ -364,23 +391,68 @@ impl Parser {
                 kind: OpKind::Identifier(identifier),
                 span: token.span,
             }),
-            TokenKind::IfKeyword => Some(Op {
-                kind: OpKind::If,
-                span: token.span,
-            }),
-            TokenKind::ChoiceKeyword => Some(Op {
-                kind: OpKind::Choice,
-                span: token.span,
-            }),
+            TokenKind::IfKeyword => {
+                let open_curly =
+                    self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                let block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
+
+                let span = Span::from_to(token.span, block.span);
+
+                if let OpKind::PushFunction(ops) = block.kind {
+
+                    //TODO: allow if/else if chains
+                    if tokens[self.cursor].kind == TokenKind::ElseKeyword {
+                        let else_keyword = self.expect_token(&TokenKind::ElseKeyword, tokens, token.span)?;
+
+                        let open_curly =
+                            self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                        let else_block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
+
+                        let span = Span::from_to(else_keyword.span, else_block.span);
+                        if let OpKind::PushFunction(else_ops) = else_block.kind {
+                            Some(Op {
+                                kind: OpKind::If {
+                                    body: ops,
+                                    else_body: Some(else_ops),
+                                },
+                                span,
+                            })
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        Some(Op {
+                            kind: OpKind::If {
+                                body: ops,
+                                else_body: None,
+                            },
+                            span,
+                        })
+                    }
+                } else {
+                    unreachable!()
+                }
+            },
+            TokenKind::ElseKeyword => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "`else` encountered without corresponding `if`".to_string(),
+                    token.span,
+                ));
+                None
+            },
             TokenKind::Error(_) => None,
         }
     }
 
-    fn parse_block(&mut self, open_paren: &Token, tokens: &[Token]) -> Option<Op> {
+    fn parse_block(
+        &mut self,
+        open_paren: &Token,
+        tokens: &[Token],
+        terminal: TokenKind,
+    ) -> Option<Op> {
         let mut ops = Vec::new();
 
-        while self.cursor < tokens.len() && tokens[self.cursor].kind != TokenKind::CloseParenthesis
-        {
+        while self.cursor < tokens.len() && tokens[self.cursor].kind != terminal {
             ops.push(self.parse_op(tokens)?);
         }
 
@@ -399,7 +471,7 @@ impl Parser {
         self.cursor += 1; //skip closing paren
 
         Some(Op {
-            kind: OpKind::PushBlock(ops),
+            kind: OpKind::PushFunction(ops),
             span: Span::from_to(open_paren.span, close_paren.span),
         })
     }

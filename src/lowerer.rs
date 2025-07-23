@@ -31,7 +31,7 @@ pub enum ByteCodeInstruction {
     PrintBool,
     PrintList,
     Label(usize),
-    Call { in_count: usize, out_count: usize },
+    Call,
     Jump { label: usize },
     JumpIfFalse { label: usize },
     Return,
@@ -105,10 +105,7 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Print => vec![self.get_opcode()],
             ByteCodeInstruction::PrintList => vec![self.get_opcode()],
             ByteCodeInstruction::Label(label) => vec![self.get_opcode(), label],
-            ByteCodeInstruction::Call {
-                in_count,
-                out_count,
-            } => vec![self.get_opcode(), in_count, out_count],
+            ByteCodeInstruction::Call => vec![self.get_opcode()],
             ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::Return => vec![self.get_opcode()],
@@ -159,13 +156,7 @@ impl ByteCodeInstruction {
             0x18 => (ByteCodeInstruction::Print, 1),
             0x19 => (ByteCodeInstruction::PrintList, 1),
             0x1A => (ByteCodeInstruction::Label(arguments[0]), 2),
-            0x1B => (
-                ByteCodeInstruction::Call {
-                    in_count: arguments[0],
-                    out_count: arguments[1],
-                },
-                3,
-            ),
+            0x1B => (ByteCodeInstruction::Call, 1),
             0x1C => (
                 ByteCodeInstruction::Jump {
                     label: arguments[0],
@@ -225,7 +216,7 @@ impl Lowerer {
         // println!("stack frame max locals: {}", frame.max_locals);
 
         self.locals_count = 0;
-        self.bindings =  HashMap::new();
+        self.bindings = HashMap::new();
 
         for (name, fn_to_emit) in &self.fns_to_emit {
             let frame = StackFrame {
@@ -233,7 +224,7 @@ impl Lowerer {
                 max_locals: self.locals_count,
             };
             self.locals_count = 0;
-            self.bindings =  HashMap::new();
+            self.bindings = HashMap::new();
 
             result.push((name.clone(), frame));
         }
@@ -301,9 +292,9 @@ impl Lowerer {
             TypedOpKind::Equals => vec![ByteCodeInstruction::Eq],
             TypedOpKind::Not => vec![ByteCodeInstruction::Push(0), ByteCodeInstruction::Eq],
             TypedOpKind::Map => {
-                let func_idx = self.next_const(format!("func_{}", self.constant_pool.len()));
-                let list_idx = self.next_const(format!("list_{}", self.constant_pool.len()));
-                let counter_idx = self.next_const(format!("counter_{}", self.constant_pool.len()));
+                let func_idx = self.next_local();
+                let list_idx = self.next_local();
+                let index_idx = self.next_local();
 
                 let cond = self.next_label();
                 let end = self.next_label();
@@ -312,39 +303,183 @@ impl Lowerer {
                 vec![
                     ByteCodeInstruction::Store { index: func_idx },
                     ByteCodeInstruction::Store { index: list_idx },
-                    //init counter with len
+                    //init index with len
                     ByteCodeInstruction::Load { index: list_idx },
                     ByteCodeInstruction::ListLen,
-                    ByteCodeInstruction::Store { index: counter_idx },
+                    ByteCodeInstruction::Store { index: index_idx },
                     //init loop
                     //Prepare loop
                     ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: index_idx },
                     ByteCodeInstruction::Push(0),
-                    ByteCodeInstruction::Load { index: counter_idx },
-                    //Is counter > 0?
+                    //Is index > 0?
                     ByteCodeInstruction::Gt,
                     ByteCodeInstruction::JumpIfFalse { label: end },
-                    //Decrement the counter before performing the get
-                    ByteCodeInstruction::Load { index: counter_idx },
+                    //Decrement the index before performing the get
+                    ByteCodeInstruction::Load { index: index_idx },
                     ByteCodeInstruction::Dec,
-                    ByteCodeInstruction::Store { index: counter_idx },
-                    //Get list[counter]
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //Get list[index]
                     ByteCodeInstruction::Load { index: list_idx },
-                    ByteCodeInstruction::Load { index: counter_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
                     ByteCodeInstruction::ListGet,
                     //[el]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el func_ptr]
-                    ByteCodeInstruction::Call {
-                        in_count: 1,
-                        out_count: 1,
-                    },
+                    ByteCodeInstruction::Call,
                     //['el...]
                     ByteCodeInstruction::Jump { label: cond },
                     ByteCodeInstruction::Label(end),
                     ByteCodeInstruction::Load { index: list_idx },
                     ByteCodeInstruction::ListLen,
                     ByteCodeInstruction::NewList,
+                ]
+            }
+            TypedOpKind::Filter => {
+                let func_idx = self.next_local();
+                let list_idx = self.next_local();
+                let index_idx = self.next_local();
+                let count_idx = self.next_local();
+
+                let cond = self.next_label();
+                let end = self.next_label();
+
+                //[list_ptr func_ptr]
+                vec![
+                    ByteCodeInstruction::Store { index: func_idx },
+                    ByteCodeInstruction::Store { index: list_idx },
+                    //init index with len
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //init count with 0
+                    ByteCodeInstruction::Push(0),
+                    ByteCodeInstruction::Store { index: count_idx },
+                    //init loop
+                    //Prepare loop
+                    ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Push(0),
+                    //Is index > 0?
+                    ByteCodeInstruction::Gt,
+                    ByteCodeInstruction::JumpIfFalse { label: end },
+                    //Decrement the index before performing the get
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Dec,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //Get list[index]
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::ListGet,
+                    //[el]
+                    ByteCodeInstruction::Load { index: func_idx },
+                    //[el func_ptr]
+                    ByteCodeInstruction::Call,
+                    //[true/false...]
+                    //Jump back to cond if predicate failed
+                    ByteCodeInstruction::JumpIfFalse { label: cond },
+                    //else put the element onto the stack
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::ListGet,
+                    //Increment element count
+                    ByteCodeInstruction::Load { index: count_idx },
+                    ByteCodeInstruction::Inc,
+                    ByteCodeInstruction::Store { index: count_idx },
+                    //loop
+                    ByteCodeInstruction::Jump { label: cond },
+                    ByteCodeInstruction::Label(end),
+                    //new list from only the elements that passed the predicate
+                    ByteCodeInstruction::Load { index: count_idx },
+                    ByteCodeInstruction::NewList,
+                ]
+            }
+            TypedOpKind::Fold => {
+                let func_idx = self.next_local();
+                let list_idx = self.next_local();
+                let index_idx = self.next_local();
+                let acc_idx = self.next_local();
+
+                let cond = self.next_label();
+                let end = self.next_label();
+
+                //[list_ptr acc func_ptr]
+                vec![
+                    ByteCodeInstruction::Store { index: func_idx },
+                    ByteCodeInstruction::Store { index: acc_idx },
+                    ByteCodeInstruction::Store { index: list_idx },
+                    //init index with len
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //init loop
+                    //Prepare loop
+                    ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Push(0),
+                    //Is index > 0?
+                    ByteCodeInstruction::Gt,
+                    ByteCodeInstruction::JumpIfFalse { label: end },
+                    //Decrement the index before performing the get
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Dec,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //Get list[index]
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::ListGet,
+                    //Get accumulator
+                    ByteCodeInstruction::Load { index: acc_idx },
+                    //[el acc]
+                    ByteCodeInstruction::Load { index: func_idx },
+                    //[el acc func_ptr]
+                    ByteCodeInstruction::Call,
+                    //['el...]
+                    ByteCodeInstruction::Store { index: acc_idx },
+                    ByteCodeInstruction::Jump { label: cond },
+                    ByteCodeInstruction::Label(end),
+                    ByteCodeInstruction::Load { index: acc_idx },
+                ]
+            }
+            TypedOpKind::Foreach => {
+                let func_idx = self.next_local();
+                let list_idx = self.next_local();
+                let index_idx = self.next_local();
+
+                let cond = self.next_label();
+                let end = self.next_label();
+
+                //[list_ptr func_ptr]
+                vec![
+                    ByteCodeInstruction::Store { index: func_idx },
+                    ByteCodeInstruction::Store { index: list_idx },
+                    //init index with 0
+                    ByteCodeInstruction::Push(0),
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //init loop
+                    //Prepare loop
+                    ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    //Is index < len?
+                    ByteCodeInstruction::Lt,
+                    ByteCodeInstruction::JumpIfFalse { label: end },
+                    //Get list[index]
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::ListGet,
+                    //[el]
+                    ByteCodeInstruction::Load { index: func_idx },
+                    //[el func_ptr]
+                    ByteCodeInstruction::Call,
+                    //Increment the index
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Inc,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //Jump back to the condition
+                    ByteCodeInstruction::Jump { label: cond },
+                    ByteCodeInstruction::Label(end),
                 ]
             }
             TypedOpKind::Print => match &op.ins[0] {
@@ -370,13 +505,11 @@ impl Lowerer {
                     unreachable!()
                 }
             }
-            TypedOpKind::Call => {
-                vec![ByteCodeInstruction::Call {
-                    in_count: op.ins.len(),
-                    out_count: op.outs.len(),
-                }]
+            TypedOpKind::Call(name) => {
+                let index = self.constant_pool.iter().position(|n| n == name).unwrap();
+                vec![ByteCodeInstruction::Push(index), ByteCodeInstruction::Call]
             }
-            TypedOpKind::Binding { bindings, block } => {
+            TypedOpKind::Binding { bindings, body } => {
                 let mut bytecode = Vec::new();
 
                 for binding in bindings {
@@ -385,10 +518,8 @@ impl Lowerer {
                     self.bindings.insert(binding.clone(), local);
                 }
 
-                if let TypedOpKind::PushBlock(ops) = &block.kind {
-                    for op in ops {
-                        bytecode.extend(self.lower_op(op));
-                    }
+                for op in body {
+                    bytecode.extend(self.lower_op(op));
                 }
 
                 bytecode
@@ -397,6 +528,46 @@ impl Lowerer {
                 let binding = self.bindings.get(name).unwrap();
 
                 vec![ByteCodeInstruction::Load { index: *binding }]
+            }
+            TypedOpKind::Identity => {
+                vec![]
+            }
+            TypedOpKind::If { body, else_body } => {
+                let end = self.next_label();
+
+                let mut body_bytecode = Vec::new();
+                for op in body {
+                    body_bytecode.extend(self.lower_op(op));
+                }
+
+                match else_body {
+                    Some(else_body) => {
+                        let else_label = self.next_label();
+
+                        let mut else_body_bytecode = Vec::new();
+                        for op in else_body {
+                            else_body_bytecode.extend(self.lower_op(op));
+                        }
+                        //[cond]
+                        let mut bytecode =
+                            vec![ByteCodeInstruction::JumpIfFalse { label: else_label }];
+                        bytecode.extend(body_bytecode);
+                        bytecode.push(ByteCodeInstruction::Jump { label: end });
+                        bytecode.push(ByteCodeInstruction::Label(else_label));
+                        bytecode.extend(else_body_bytecode);
+                        bytecode.push(ByteCodeInstruction::Label(end));
+
+                        bytecode
+                    }
+                    None => {
+                        //[cond]
+                        let mut bytecode = vec![ByteCodeInstruction::JumpIfFalse { label: end }];
+                        bytecode.extend(body_bytecode);
+                        bytecode.push(ByteCodeInstruction::Label(end));
+
+                        bytecode
+                    }
+                }
             }
             _ => todo!("lowering {:?} is not yet implemented", op.kind),
         }
@@ -457,9 +628,10 @@ impl Lowerer {
         local
     }
 
-    fn next_const(&mut self, name: String) -> usize {
-        let index = self.constant_pool.len();
-        self.constant_pool.push(name);
-        index
-    }
+    //TODO: this will enable String literals in future but we don't need it now
+    // fn next_const(&mut self, name: String) -> usize {
+    //     let index = self.constant_pool.len();
+    //     self.constant_pool.push(name);
+    //     index
+    // }
 }

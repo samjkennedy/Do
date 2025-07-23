@@ -10,43 +10,31 @@ pub struct FasmEmitter {
 
 impl FasmEmitter {
     pub fn new(out_file: File) -> Self {
-        FasmEmitter { labels: 0, out_file }
+        FasmEmitter {
+            labels: 0,
+            out_file,
+        }
     }
 
-    pub fn emit(
-        &mut self,
-        program: &[(String, StackFrame)],
-        constants: &[String],
-    ) -> Result<()> {
+    pub fn emit(&mut self, program: &[(String, StackFrame)], constants: &[String]) -> Result<()> {
         self.emit_preamble()?;
         self.emit_helper_functions()?;
 
         for (name, frame) in program {
             writeln!(self.out_file, "{}:", name)?;
-            if name == "main" {
-
-                //subtract from rsp the number of locals
-                writeln!(self.out_file, "push rbp")?;
-                writeln!(self.out_file, "mov rbp, rsp")?;
-                writeln!(self.out_file, "sub rsp, {}", frame.max_locals * 8)?;
-
-                writeln!(
-                    self.out_file,
-                    "sub rsp, 8 ; align the stack to 16 bytes (Windows ABI requirement)"
-                )?;
-            } else {
-                writeln!(self.out_file, "\tpush rbx")?; //preserve volatile register
-
-                //TODO: needs the signature to know how many to push
-                //      or fully just use the stack
-                writeln!(self.out_file, "\tpush rcx")?;
-            }
+            //subtract from rsp the number of locals
+            writeln!(self.out_file, "push rbp")?;
+            writeln!(self.out_file, "mov rbp, rsp")?;
+            writeln!(self.out_file, "sub rsp, {}", frame.max_locals * 8)?;
+            //
+            // if name == "main" {
+            //     writeln!(
+            //         self.out_file,
+            //         "sub rsp, 8 ; align the stack to 16 bytes (Windows ABI requirement)"
+            //     )?;
+            // }
 
             for op in &frame.instructions {
-                if let ByteCodeInstruction::Return = op {
-                    writeln!(self.out_file, "\tpop rax")?;
-                    writeln!(self.out_file, "\tpop rbx")?; //restore volatile register
-                }
                 self.emit_op(op, constants)?;
             }
 
@@ -257,7 +245,7 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tpop rbx")?;
                 writeln!(self.out_file, "\tsub rbx, rax")?;
-                writeln!(self.out_file, "\tpush rax")
+                writeln!(self.out_file, "\tpush rbx")
             }
             ByteCodeInstruction::Mul => {
                 writeln!(self.out_file, "\tpop rax")?;
@@ -365,32 +353,15 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpush rax")
             }
             ByteCodeInstruction::Label(label) => writeln!(self.out_file, ".label_{}:", label),
-            ByteCodeInstruction::Call {
-                in_count,
-                out_count,
-            } => {
+            ByteCodeInstruction::Call => {
                 //Get pointer to function from the stack
                 writeln!(self.out_file, "\tpop rax")?;
-
-                let in_regs = ["rcx", "rdx", "r8", "r9"];
-                if *in_count > 4 {
-                    todo!("more than 4 ins")
-                }
-                if *out_count > 1 {
-                    todo!("more than 1 outs")
-                }
-                for reg in in_regs.iter().take(*in_count) {
-                    writeln!(self.out_file, "\tpop {}", reg)?;
-                }
-
                 writeln!(self.out_file, "\tcall rax")?;
-
-                if *out_count == 1 {
-                    writeln!(self.out_file, "\tpush rax")?;
-                }
                 Ok(())
             }
-            ByteCodeInstruction::Jump { label } => writeln!(self.out_file, "\tjmp .label_{}", label),
+            ByteCodeInstruction::Jump { label } => {
+                writeln!(self.out_file, "\tjmp .label_{}", label)
+            }
             ByteCodeInstruction::JumpIfFalse { label } => {
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\ttest rax, rax")?;

@@ -152,7 +152,7 @@ impl Interpreter {
                                 sub_interpreter.interpret(elements);
                                 values.push(Value::List(sub_interpreter.stack));
                             }
-                            OpKind::PushBlock(ops) => {
+                            OpKind::PushFunction(ops) => {
                                 values.push(Value::Block(ops.clone()));
                             }
                             _ => unreachable!(),
@@ -160,7 +160,7 @@ impl Interpreter {
                     }
                     self.stack.push(Value::List(values));
                 }
-                OpKind::PushBlock(ops) => {
+                OpKind::PushFunction(ops) => {
                     self.stack.push(Value::Block(ops.clone()));
                 }
                 OpKind::Plus => {
@@ -435,7 +435,7 @@ impl Interpreter {
                 OpKind::DumpStack => {}
                 OpKind::DefineFunction { identifier, body } => {
                     if let TokenKind::Identifier(name) = &identifier.kind {
-                        if let OpKind::PushBlock(ops) = &body.kind {
+                        if let OpKind::PushFunction(ops) = &body.kind {
                             self.functions.insert(name.clone(), ops.clone());
                         } else {
                             unreachable!()
@@ -448,39 +448,8 @@ impl Interpreter {
                     let ops = self.functions.get(name).unwrap().clone();
                     self.interpret(&ops);
                 }
-                OpKind::If => {
-                    if let Value::Block(ops) = &self.stack.pop().unwrap() {
-                        if let Value::Bool(condition) = self.stack.pop().unwrap() {
-                            if condition {
-                                self.interpret(ops);
-                            }
-                        } else {
-                            unreachable!()
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                }
-                OpKind::Choice => {
-                    if let Value::Block(else_branch) = &self.stack.pop().unwrap() {
-                        if let Value::Block(then_branch) = &self.stack.pop().unwrap() {
-                            if let Value::Bool(condition) = self.stack.pop().unwrap() {
-                                if condition {
-                                    self.interpret(then_branch);
-                                } else {
-                                    self.interpret(else_branch);
-                                }
-                            } else {
-                                unreachable!()
-                            }
-                        } else {
-                            unreachable!()
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                }
-                OpKind::Binding { .. } => todo!()
+                OpKind::If { .. } => todo!(),
+                OpKind::Binding { .. } => todo!(),
             }
         }
     }

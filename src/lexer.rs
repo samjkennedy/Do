@@ -12,6 +12,8 @@ pub enum TokenKind {
     Percent,
     OpenParenthesis,
     CloseParenthesis,
+    OpenCurly,
+    CloseCurly,
     OpenAngle,
     OpenAngleEquals,
     CloseAngle,
@@ -42,7 +44,7 @@ pub enum TokenKind {
     TripleQuestion,
     FnKeyword,
     IfKeyword,
-    ChoiceKeyword,
+    ElseKeyword,
     LetKeyword,
     Error(String),
 }
@@ -101,6 +103,8 @@ impl Lexer {
                 '%' => self.lex_token(c, TokenKind::Percent),
                 '(' => self.lex_token(c, TokenKind::OpenParenthesis),
                 ')' => self.lex_token(c, TokenKind::CloseParenthesis),
+                '{' => self.lex_token(c, TokenKind::OpenCurly),
+                '}' => self.lex_token(c, TokenKind::CloseCurly),
                 '<' => self.lex_multichar_token(
                     input,
                     c,
@@ -362,8 +366,8 @@ impl Lexer {
                 kind: TokenKind::IfKeyword,
                 span: Span { offset, length },
             },
-            "choice" => Token {
-                kind: TokenKind::ChoiceKeyword,
+            "else" => Token {
+                kind: TokenKind::ElseKeyword,
                 span: Span { offset, length },
             },
             "let" => Token {

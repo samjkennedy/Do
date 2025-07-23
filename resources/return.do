@@ -1,3 +1,5 @@
 fn foo (
-    dup * 10 > (return) if
+    dup * 10 > if {
+        return
+    }
 )
