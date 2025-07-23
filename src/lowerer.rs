@@ -441,6 +441,47 @@ impl Lowerer {
                     ByteCodeInstruction::Load { index: acc_idx },
                 ]
             }
+            TypedOpKind::Foreach => {
+                let func_idx = self.next_local();
+                let list_idx = self.next_local();
+                let index_idx = self.next_local();
+
+                let cond = self.next_label();
+                let end = self.next_label();
+
+                //[list_ptr func_ptr]
+                vec![
+                    ByteCodeInstruction::Store { index: func_idx },
+                    ByteCodeInstruction::Store { index: list_idx },
+                    //init index with 0
+                    ByteCodeInstruction::Push(0),
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //init loop
+                    //Prepare loop
+                    ByteCodeInstruction::Label(cond),
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::ListLen,
+                    //Is index < len?
+                    ByteCodeInstruction::Lt,
+                    ByteCodeInstruction::JumpIfFalse { label: end },
+                    //Get list[index]
+                    ByteCodeInstruction::Load { index: list_idx },
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::ListGet,
+                    //[el]
+                    ByteCodeInstruction::Load { index: func_idx },
+                    //[el func_ptr]
+                    ByteCodeInstruction::Call,
+                    //Increment the index
+                    ByteCodeInstruction::Load { index: index_idx },
+                    ByteCodeInstruction::Inc,
+                    ByteCodeInstruction::Store { index: index_idx },
+                    //Jump back to the condition
+                    ByteCodeInstruction::Jump { label: cond },
+                    ByteCodeInstruction::Label(end),
+                ]
+            }
             TypedOpKind::Print => match &op.ins[0] {
                 TypeKind::List(_) => vec![ByteCodeInstruction::PrintList],
                 TypeKind::Bool => vec![ByteCodeInstruction::PrintBool],
