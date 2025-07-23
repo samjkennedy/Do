@@ -6,7 +6,8 @@
 
 # The Do Programming Language
 
-Do is a stack-based, strongly typed, functional programming language designed around composition, inference, and lists. The
+Do is a stack-based, strongly typed, functional programming language designed around composition, inference, and lists.
+The
 concatenation of two programs is their composition.
 
 It draws inspiration from Forth, Porth, Factor and Joy, combining postfix syntax with Hindley-Milner-esque
@@ -121,14 +122,6 @@ operators in Do so far:
 | fold      | [a] fn(a b -> b) b -> b  | Left fold over list             |
 | foreach   | [a] fn(a -> ) ->         | Apply function to each element  |
 
-### Control Flow
-
-| Operation | Signature                                     | Description                                                        |
-|-----------|-----------------------------------------------|--------------------------------------------------------------------|
-| if        | bool fn(->) ->                                | Run block if condition is true                                     |
-| choice    | ... bool fn(... -> ...) fn(... -> ...) -> ... | If/else: choose one of two branches (\<cond> (then) (else) choice) |
-| return    | N/A                                           | Exits the current function, returning what's on the stack          |
-
 ### List Operations
 
 | Operation | Signature      | Description                                |
@@ -155,6 +148,20 @@ Stack values can be bound to identifiers with the `let` keyword:
     b print     // prints 5
     a b + print // prints 9
 }
+```
+
+### Control Flow
+
+Different branches can be executed with `if/else`:
+
+```
+10
+true if {
+    10 +
+} else {
+    5 +
+}
+print //prints 20
 ```
 
 ## Example Programs
