@@ -44,7 +44,7 @@ pub enum TokenKind {
     TripleQuestion,
     FnKeyword,
     IfKeyword,
-    ChoiceKeyword,
+    ElseKeyword,
     LetKeyword,
     Error(String),
 }
@@ -366,8 +366,8 @@ impl Lexer {
                 kind: TokenKind::IfKeyword,
                 span: Span { offset, length },
             },
-            "choice" => Token {
-                kind: TokenKind::ChoiceKeyword,
+            "else" => Token {
+                kind: TokenKind::ElseKeyword,
                 span: Span { offset, length },
             },
             "let" => Token {

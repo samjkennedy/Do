@@ -46,8 +46,8 @@ pub enum OpKind {
     Identifier(String),
     If {
         body: Vec<Op>,
+        else_body: Option<Vec<Op>>,
     },
-    Choice,
     Binding {
         bindings: Vec<Token>,
         body: Box<Op>,
@@ -124,8 +124,7 @@ impl Display for Op {
                 }
             }
             OpKind::Identifier(name) => write!(f, "{}", name),
-            OpKind::If { .. } => write!(f, "if"),
-            OpKind::Choice => write!(f, "choice"),
+            OpKind::If { .. } => todo!(),
             OpKind::Binding { .. } => write!(f, ""),
         }
     }
@@ -396,23 +395,51 @@ impl Parser {
                 let open_curly =
                     self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
                 let block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
+
                 let span = Span::from_to(token.span, block.span);
-                
+
                 if let OpKind::PushFunction(ops) = block.kind {
-                    Some(Op {
-                        kind: OpKind::If {
-                            body: ops,
-                        },
-                        span,
-                    })
+
+                    //TODO: allow if/else if chains
+                    if tokens[self.cursor].kind == TokenKind::ElseKeyword {
+                        let else_keyword = self.expect_token(&TokenKind::ElseKeyword, tokens, token.span)?;
+
+                        let open_curly =
+                            self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                        let else_block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
+
+                        let span = Span::from_to(else_keyword.span, else_block.span);
+                        if let OpKind::PushFunction(else_ops) = else_block.kind {
+                            Some(Op {
+                                kind: OpKind::If {
+                                    body: ops,
+                                    else_body: Some(else_ops),
+                                },
+                                span,
+                            })
+                        } else {
+                            unreachable!()
+                        }
+                    } else {
+                        Some(Op {
+                            kind: OpKind::If {
+                                body: ops,
+                                else_body: None,
+                            },
+                            span,
+                        })
+                    }
                 } else {
                     unreachable!()
                 }
             },
-            TokenKind::ChoiceKeyword => Some(Op {
-                kind: OpKind::Choice,
-                span: token.span,
-            }),
+            TokenKind::ElseKeyword => {
+                self.diagnostics.push(Diagnostic::report_error(
+                    "`else` encountered without corresponding `if`".to_string(),
+                    token.span,
+                ));
+                None
+            },
             TokenKind::Error(_) => None,
         }
     }

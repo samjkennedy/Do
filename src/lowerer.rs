@@ -532,20 +532,42 @@ impl Lowerer {
             TypedOpKind::Identity => {
                 vec![]
             }
-            TypedOpKind::If { body } => {
+            TypedOpKind::If { body, else_body } => {
                 let end = self.next_label();
-                
+
                 let mut body_bytecode = Vec::new();
                 for op in body {
                     body_bytecode.extend(self.lower_op(op));
                 }
-                
-                //[cond]
-                let mut bytecode = vec![ByteCodeInstruction::JumpIfFalse { label: end }];
-                bytecode.extend(body_bytecode);
-                bytecode.push(ByteCodeInstruction::Label(end));
-                
-                bytecode
+
+                match else_body {
+                    Some(else_body) => {
+                        let else_label = self.next_label();
+
+                        let mut else_body_bytecode = Vec::new();
+                        for op in else_body {
+                            else_body_bytecode.extend(self.lower_op(op));
+                        }
+                        //[cond]
+                        let mut bytecode =
+                            vec![ByteCodeInstruction::JumpIfFalse { label: else_label }];
+                        bytecode.extend(body_bytecode);
+                        bytecode.push(ByteCodeInstruction::Jump { label: end });
+                        bytecode.push(ByteCodeInstruction::Label(else_label));
+                        bytecode.extend(else_body_bytecode);
+                        bytecode.push(ByteCodeInstruction::Label(end));
+
+                        bytecode
+                    }
+                    None => {
+                        //[cond]
+                        let mut bytecode = vec![ByteCodeInstruction::JumpIfFalse { label: end }];
+                        bytecode.extend(body_bytecode);
+                        bytecode.push(ByteCodeInstruction::Label(end));
+
+                        bytecode
+                    }
+                }
             }
             _ => todo!("lowering {:?} is not yet implemented", op.kind),
         }

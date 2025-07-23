@@ -449,7 +449,6 @@ impl Interpreter {
                     self.interpret(&ops);
                 }
                 OpKind::If { .. } => todo!(),
-                OpKind::Choice => todo!(),
                 OpKind::Binding { .. } => todo!(),
             }
         }
