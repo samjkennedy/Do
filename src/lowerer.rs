@@ -532,6 +532,21 @@ impl Lowerer {
             TypedOpKind::Identity => {
                 vec![]
             }
+            TypedOpKind::If { body } => {
+                let end = self.next_label();
+                
+                let mut body_bytecode = Vec::new();
+                for op in body {
+                    body_bytecode.extend(self.lower_op(op));
+                }
+                
+                //[cond]
+                let mut bytecode = vec![ByteCodeInstruction::JumpIfFalse { label: end }];
+                bytecode.extend(body_bytecode);
+                bytecode.push(ByteCodeInstruction::Label(end));
+                
+                bytecode
+            }
             _ => todo!("lowering {:?} is not yet implemented", op.kind),
         }
     }

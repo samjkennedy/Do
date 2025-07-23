@@ -7,7 +7,7 @@ pub enum OpKind {
     PushBool(bool),
     PushInt(i64),
     PushList(Vec<Op>),
-    PushBlock(Vec<Op>),
+    PushFunction(Vec<Op>),
     Plus,
     Minus,
     Multiply,
@@ -44,11 +44,13 @@ pub enum OpKind {
         body: Box<Op>,
     },
     Identifier(String),
-    If,
+    If {
+        body: Vec<Op>,
+    },
     Choice,
     Binding {
         bindings: Vec<Token>,
-        block: Box<Op>,
+        body: Box<Op>,
     },
 }
 
@@ -73,7 +75,7 @@ impl Display for Op {
                 }
                 write!(f, "]")
             }
-            OpKind::PushBlock(block) => {
+            OpKind::PushFunction(block) => {
                 write!(f, "(")?;
                 for (i, op) in block.iter().enumerate() {
                     write!(f, "{}", op)?;
@@ -122,7 +124,7 @@ impl Display for Op {
                 }
             }
             OpKind::Identifier(name) => write!(f, "{}", name),
-            OpKind::If => write!(f, "if"),
+            OpKind::If { .. } => write!(f, "if"),
             OpKind::Choice => write!(f, "choice"),
             OpKind::Binding { .. } => write!(f, ""),
         }
@@ -282,7 +284,7 @@ impl Parser {
                 Some(Op {
                     kind: OpKind::Binding {
                         bindings,
-                        block: Box::new(block),
+                        body: Box::new(block),
                     },
                     span,
                 })
@@ -390,10 +392,23 @@ impl Parser {
                 kind: OpKind::Identifier(identifier),
                 span: token.span,
             }),
-            TokenKind::IfKeyword => Some(Op {
-                kind: OpKind::If,
-                span: token.span,
-            }),
+            TokenKind::IfKeyword => {
+                let open_curly =
+                    self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
+                let block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
+                let span = Span::from_to(token.span, block.span);
+                
+                if let OpKind::PushFunction(ops) = block.kind {
+                    Some(Op {
+                        kind: OpKind::If {
+                            body: ops,
+                        },
+                        span,
+                    })
+                } else {
+                    unreachable!()
+                }
+            },
             TokenKind::ChoiceKeyword => Some(Op {
                 kind: OpKind::Choice,
                 span: token.span,
@@ -429,7 +444,7 @@ impl Parser {
         self.cursor += 1; //skip closing paren
 
         Some(Op {
-            kind: OpKind::PushBlock(ops),
+            kind: OpKind::PushFunction(ops),
             span: Span::from_to(open_paren.span, close_paren.span),
         })
     }
