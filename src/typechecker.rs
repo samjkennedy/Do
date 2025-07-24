@@ -744,6 +744,8 @@ impl TypeChecker {
                             typed_ops.push(typed_op);
                         }
                         let checked_body = self.type_check_block(body, span);
+                        self.type_stack.push((TypeKind::Bool, bool_span));
+                        
                         let checked_else_body = self.type_check_block(else_body, span);
 
                         self.check_op_symmetrical(span, &checked_body);
@@ -761,7 +763,6 @@ impl TypeChecker {
                             if let TypedOpKind::PushBlock(typed_else_body_ops) =
                                 &checked_else_body.kind
                             {
-                                self.type_stack.push((TypeKind::Bool, bool_span));
 
                                 let mut ins = vec![TypeKind::Bool];
                                 ins.extend(checked_body.ins);
@@ -956,7 +957,7 @@ impl TypeChecker {
     fn resolve_type_stack(&mut self, op: &Op, typed_op: &TypedOp) {
         for input in typed_op.ins.clone() {
             match self.type_stack.pop() {
-                Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
+                Some((type_kind, span)) => self.expect_type(&type_kind, &input, op.span),
                 None => self.diagnostics.push(Diagnostic::report_error(
                     format!("Expected {} but stack was empty", input),
                     op.span,

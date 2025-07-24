@@ -1,7 +1,7 @@
 use crate::typechecker::{TypeKind, TypedOp, TypedOpKind};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ByteCodeInstruction {
     Push(usize),
     Pop,
@@ -32,6 +32,7 @@ pub enum ByteCodeInstruction {
     PrintList,
     Label(usize),
     Call,
+    CallNamed(String),
     Jump { label: usize },
     JumpIfFalse { label: usize },
     Return,
@@ -73,6 +74,7 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Inc => 0x1F,
             ByteCodeInstruction::Dec => 0x20,
             ByteCodeInstruction::PrintBool => 0x21,
+            ByteCodeInstruction::CallNamed(_) => 0x22,
         }
     }
 
@@ -106,6 +108,7 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::PrintList => vec![self.get_opcode()],
             ByteCodeInstruction::Label(label) => vec![self.get_opcode(), label],
             ByteCodeInstruction::Call => vec![self.get_opcode()],
+            ByteCodeInstruction::CallNamed(_) => todo!(),
             ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), label],
             ByteCodeInstruction::Return => vec![self.get_opcode()],
@@ -506,8 +509,7 @@ impl Lowerer {
                 }
             }
             TypedOpKind::Call(name) => {
-                let index = self.constant_pool.iter().position(|n| n == name).unwrap();
-                vec![ByteCodeInstruction::Push(index), ByteCodeInstruction::Call]
+                vec![ByteCodeInstruction::CallNamed(name.clone())]
             }
             TypedOpKind::Binding { bindings, body } => {
                 let mut bytecode = Vec::new();

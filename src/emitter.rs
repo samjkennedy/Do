@@ -23,16 +23,17 @@ impl FasmEmitter {
         for (name, frame) in program {
             writeln!(self.out_file, "{}:", name)?;
             //subtract from rsp the number of locals
-            writeln!(self.out_file, "push rbp")?;
-            writeln!(self.out_file, "mov rbp, rsp")?;
-            writeln!(self.out_file, "sub rsp, {}", frame.max_locals * 8)?;
-            //
-            // if name == "main" {
-            //     writeln!(
-            //         self.out_file,
-            //         "sub rsp, 8 ; align the stack to 16 bytes (Windows ABI requirement)"
-            //     )?;
-            // }
+
+            if name != "main" {
+                //TODO: pop the return address from the stack and save it somewhere to return to later
+                //      needs to be pushed onto a stack somewhere so that multiple calls can return and unwind the stack
+            }
+
+            if frame.max_locals > 0 {
+                writeln!(self.out_file, "push rbp")?;
+                writeln!(self.out_file, "mov rbp, rsp")?;
+                writeln!(self.out_file, "sub rsp, {}", frame.max_locals * 8)?;
+            }
 
             for op in &frame.instructions {
                 self.emit_op(op, constants)?;
@@ -359,6 +360,10 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tcall rax")?;
                 Ok(())
             }
+            ByteCodeInstruction::CallNamed(name) => {
+                writeln!(self.out_file, "\tcall {}", name)?;
+                Ok(())
+            }
             ByteCodeInstruction::Jump { label } => {
                 writeln!(self.out_file, "\tjmp .label_{}", label)
             }
@@ -367,7 +372,10 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\ttest rax, rax")?;
                 writeln!(self.out_file, "\tjz .label_{}", label)
             }
-            ByteCodeInstruction::Return => writeln!(self.out_file, "\tret"),
+            ByteCodeInstruction::Return => {
+                //TODO: push the return address back onto the stack from where it's saved
+                writeln!(self.out_file, "\tret")
+            },
         }
     }
 

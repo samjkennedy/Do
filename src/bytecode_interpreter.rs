@@ -43,8 +43,8 @@ impl BytecodeInterpreter {
                     }
                     self.labels.insert(*label, self.rom.len());
                 }
-                for word in instruction.to_binary() {
-                    self.rom.push(word);
+                for word in &instruction.clone().to_binary() {
+                    self.rom.push(*word);
                 }
             }
         }
@@ -204,7 +204,7 @@ impl BytecodeInterpreter {
                 }
                 println!("]");
             }
-            ByteCodeInstruction::Call => {
+            ByteCodeInstruction::Call | ByteCodeInstruction::CallNamed(_) => {
                 let func = self.stack.pop().unwrap();
                 let name = &constants[func];
                 let addr = functions.get(name).unwrap();
