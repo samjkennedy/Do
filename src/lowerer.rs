@@ -508,6 +508,9 @@ impl Lowerer {
                     unreachable!()
                 }
             }
+            TypedOpKind::Do => {
+                vec![ByteCodeInstruction::Call]
+            }
             TypedOpKind::Call(name) => {
                 vec![ByteCodeInstruction::CallNamed(name.clone())]
             }

@@ -39,9 +39,9 @@ impl BytecodeInterpreter {
             for instruction in &function.instructions {
                 if let ByteCodeInstruction::Label(label) = instruction {
                     if label >= &self.labels.len() {
-                        self.labels.extend(vec![0; label - self.labels.len()]);
+                        self.labels.extend(vec![0; label - self.labels.len() + 1]);
                     }
-                    self.labels.insert(*label, self.rom.len());
+                    self.labels[*label] = self.rom.len();
                 }
                 for word in &instruction.clone().to_binary() {
                     self.rom.push(*word);
@@ -66,6 +66,7 @@ impl BytecodeInterpreter {
         constants: &[String],
         functions: &HashMap<&String, usize>,
     ) {
+        // println!(">pc: {}, op: {:?}", self.pc, opcode);
         match opcode {
             ByteCodeInstruction::Push(value) => {
                 self.stack.push(*value);
@@ -238,7 +239,6 @@ impl BytecodeInterpreter {
                 self.pc = self.labels[*label];
             }
         }
-        // println!(">pc: {}, op: {:?}", self.pc, opcode);
         // println!("(=) {:?}", self.stack);
         // println!("(^) {:?}", self.heap);
         // println!("(*) {:?}", self.locals);

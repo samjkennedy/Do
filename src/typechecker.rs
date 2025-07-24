@@ -98,7 +98,7 @@ impl Display for TypeKind {
 pub struct TypedOp {
     pub kind: TypedOpKind,
     pub ins: Vec<TypeKind>,
-    pub outs: Vec<TypeKind>, //No need for the outs in lowering yet, so comment it to silence the compiler warnings
+    pub outs: Vec<TypeKind>,
 }
 
 #[derive(Clone)]
@@ -630,14 +630,49 @@ impl TypeChecker {
                     outs: vec![TypeKind::List(Box::new(TypeKind::Generic(index)))],
                 }
             }
-            OpKind::Do => TypedOp {
-                kind: TypedOpKind::Do,
-                ins: vec![TypeKind::Block {
-                    ins: vec![], //TODO: Do should accept varargs
-                    outs: vec![],
-                }],
-                outs: vec![],
-            },
+            OpKind::Do => {
+                match self.peek_type(span) {
+                    Some((type_kind, type_span)) => {
+                        match &type_kind {
+                            TypeKind::Block { ins, outs } => {
+                                let mut do_ins = Vec::new();
+                                do_ins.push(type_kind.clone());
+                                do_ins.extend(ins.clone());
+                                TypedOp {
+                                    kind: TypedOpKind::Do,
+                                    ins: do_ins,
+                                    outs: outs.clone(),
+                                }
+                            }
+                            TypeKind::Generic(_) => todo!("`do` in lambdas"),
+                            _ => {
+                                self.diagnostics.push(Diagnostic::report_error_with_hint(
+                                    format!("expected a function but got {}", type_kind),
+                                    span,
+                                    (format!("{} introduced at", type_kind), type_span),
+                                ));
+                                //Return bogus with expected to continue checking normally
+                                TypedOp {
+                                    kind: TypedOpKind::Do,
+                                    ins: vec![type_kind],
+                                    outs: vec![],
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        self.diagnostics.push(Diagnostic::report_error(
+                            "expected a function but stack was empty".to_string(),
+                            span,
+                        ));
+                        TypedOp {
+                            kind: TypedOpKind::Do,
+                            ins: vec![],
+                            outs: vec![],
+                        }
+                    }
+                }
+            }
             OpKind::Filter => {
                 let a = self.create_generic();
                 TypedOp {
@@ -963,6 +998,24 @@ impl TypeChecker {
     fn pop_type(&mut self, span: Span) -> Option<(TypeKind, Span)> {
         match self.type_stack.pop() {
             Some((type_kind, span)) => Some((type_kind, span)),
+            None => {
+                if self.in_block {
+                    let generic = self.create_generic();
+                    Some((TypeKind::Generic(generic), span))
+                } else {
+                    self.diagnostics.push(Diagnostic::report_error(
+                        "expected value but stack was empty".to_string(),
+                        span,
+                    ));
+                    None
+                }
+            }
+        }
+    }
+
+    fn peek_type(&mut self, span: Span) -> Option<(TypeKind, Span)> {
+        match self.type_stack.last() {
+            Some((type_kind, span)) => Some((type_kind.clone(), span.clone())),
             None => {
                 if self.in_block {
                     let generic = self.create_generic();
