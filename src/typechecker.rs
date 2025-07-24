@@ -220,7 +220,7 @@ impl TypeChecker {
                 {
                     self.diagnostics.push(Diagnostic::report_error(
                         format!(
-                            "Expected {} but got {}",
+                            "expected {} but got {}",
                             self.erase(original_expected).unwrap(),
                             self.erase(original_actual).unwrap()
                         ),
@@ -303,7 +303,7 @@ impl TypeChecker {
                 if self.erase(expected) != self.erase(actual) {
                     self.diagnostics.push(Diagnostic::report_error(
                         format!(
-                            "Expected {} but got {}",
+                            "expected {} but got {}",
                             self.erase(original_expected).unwrap(),
                             self.erase(original_actual).unwrap()
                         ),
@@ -733,142 +733,100 @@ impl TypeChecker {
                 }
             }
             OpKind::If { body, else_body } => match else_body {
-                Some(else_body) => match self.pop_type(span) {
-                    Some((TypeKind::Bool, bool_span)) => {
-                        let mut typed_ops = Vec::new();
-                        for op in body {
-                            let typed_op = self.type_check_op(&op.kind, op.span);
+                Some(else_body) => {
+                    let top = self.pop_type(span);
+                    let mut typed_ops = Vec::new();
+                    for op in body {
+                        let typed_op = self.type_check_op(&op.kind, op.span);
 
-                            self.resolve_type_stack(op, &typed_op);
+                        self.resolve_type_stack(op, &typed_op);
 
-                            typed_ops.push(typed_op);
-                        }
-                        let checked_body = self.type_check_block(body, span);
-                        self.type_stack.push((TypeKind::Bool, bool_span));
-                        
-                        let checked_else_body = self.type_check_block(else_body, span);
+                        typed_ops.push(typed_op);
+                    }
+                    let body_span = if body.is_empty() {
+                        span
+                    } else {
+                        Span::from_to(body.first().unwrap().span, body.last().unwrap().span)
+                    };
+                    let checked_body = self.type_check_block(body, body_span);
+                    if let Some(cond) = top {
+                        self.type_stack.push(cond)
+                    }
 
-                        self.check_op_symmetrical(span, &checked_body);
-                        self.check_op_symmetrical(span, &checked_else_body);
+                    let else_span = if else_body.is_empty() {
+                        span
+                    } else {
+                        Span::from_to(else_body.first().unwrap().span, else_body.last().unwrap().span)
+                    };
+                    let checked_else_body = self.type_check_block(else_body, else_span);
 
-                        for (body_in, else_in) in zip(&checked_body.ins, &checked_else_body.ins) {
-                            self.expect_type(body_in, else_in, span);
-                        }
-                        for (body_out, else_out) in zip(&checked_body.outs, &checked_else_body.outs)
+                    self.check_op_symmetrical(body_span, &checked_body);
+                    self.check_op_symmetrical(else_span, &checked_else_body);
+
+                    for (body_in, else_in) in zip(&checked_body.ins, &checked_else_body.ins) {
+                        self.expect_type(body_in, else_in, span);
+                    }
+                    for (body_out, else_out) in zip(&checked_body.outs, &checked_else_body.outs) {
+                        self.expect_type(body_out, else_out, span);
+                    }
+
+                    if let TypedOpKind::PushBlock(typed_body_ops) = &checked_body.kind {
+                        if let TypedOpKind::PushBlock(typed_else_body_ops) = &checked_else_body.kind
                         {
-                            self.expect_type(body_out, else_out, span);
-                        }
-
-                        if let TypedOpKind::PushBlock(typed_body_ops) = &checked_body.kind {
-                            if let TypedOpKind::PushBlock(typed_else_body_ops) =
-                                &checked_else_body.kind
-                            {
-
-                                let mut ins = vec![TypeKind::Bool];
-                                ins.extend(checked_body.ins);
-                                TypedOp {
-                                    ins,
-                                    outs: checked_body.outs,
-                                    kind: TypedOpKind::If {
-                                        body: typed_body_ops.clone(),
-                                        else_body: Some(typed_else_body_ops.clone()),
-                                    },
-                                }
-                            } else {
-                                unreachable!()
-                            }
-                        } else {
-                            unreachable!()
-                        }
-                    }
-                    Some((type_kind, span)) => {
-                        self.diagnostics.push(Diagnostic::report_error(
-                            format!("expected {} but got {}", TypeKind::Bool, type_kind),
-                            span,
-                        ));
-                        TypedOp {
-                            ins: vec![TypeKind::Bool],
-                            outs: vec![],
-                            kind: TypedOpKind::If {
-                                body: vec![],
-                                else_body: Some(vec![]),
-                            },
-                        }
-                    }
-                    None => {
-                        self.diagnostics.push(Diagnostic::report_error(
-                            format!("expected {} but stack was empty", TypeKind::Bool),
-                            span,
-                        ));
-                        TypedOp {
-                            ins: vec![TypeKind::Bool],
-                            outs: vec![],
-                            kind: TypedOpKind::If {
-                                body: vec![],
-                                else_body: Some(vec![]),
-                            },
-                        }
-                    }
-                },
-                None => match self.pop_type(span) {
-                    Some((TypeKind::Bool, bool_span)) => {
-                        let mut typed_ops = Vec::new();
-                        for op in body {
-                            let typed_op = self.type_check_op(&op.kind, op.span);
-
-                            self.resolve_type_stack(op, &typed_op);
-
-                            typed_ops.push(typed_op);
-                        }
-                        let checked_body = self.type_check_block(body, span);
-                        self.check_op_symmetrical(span, &checked_body);
-
-                        if let TypedOpKind::PushBlock(typed_ops) = &checked_body.kind {
-                            self.type_stack.push((TypeKind::Bool, bool_span));
-
                             let mut ins = vec![TypeKind::Bool];
                             ins.extend(checked_body.ins);
                             TypedOp {
                                 ins,
                                 outs: checked_body.outs,
                                 kind: TypedOpKind::If {
-                                    body: typed_ops.clone(),
-                                    else_body: None,
+                                    body: typed_body_ops.clone(),
+                                    else_body: Some(typed_else_body_ops.clone()),
                                 },
                             }
                         } else {
                             unreachable!()
                         }
+                    } else {
+                        unreachable!()
                     }
-                    Some((type_kind, span)) => {
-                        self.diagnostics.push(Diagnostic::report_error(
-                            format!("expected {} but got {}", TypeKind::Bool, type_kind),
-                            span,
-                        ));
+                }
+                None => {
+                    let top = self.pop_type(span);
+                    let mut typed_ops = Vec::new();
+                    for op in body {
+                        let typed_op = self.type_check_op(&op.kind, op.span);
+
+                        self.resolve_type_stack(op, &typed_op);
+
+                        typed_ops.push(typed_op);
+                    }
+                    let body_span = if body.is_empty() {
+                        span
+                    } else {
+                        Span::from_to(body.first().unwrap().span, body.last().unwrap().span)
+                    };
+                    let checked_body = self.type_check_block(body, body_span);
+                    self.check_op_symmetrical(body_span, &checked_body);
+
+                    if let TypedOpKind::PushBlock(typed_ops) = &checked_body.kind {
+                        if let Some(cond) = top {
+                            self.type_stack.push(cond)
+                        }
+
+                        let mut ins = vec![TypeKind::Bool];
+                        ins.extend(checked_body.ins);
                         TypedOp {
-                            ins: vec![TypeKind::Bool],
-                            outs: vec![],
+                            ins,
+                            outs: checked_body.outs,
                             kind: TypedOpKind::If {
-                                body: vec![],
+                                body: typed_ops.clone(),
                                 else_body: None,
                             },
                         }
+                    } else {
+                        unreachable!()
                     }
-                    None => {
-                        self.diagnostics.push(Diagnostic::report_error(
-                            format!("expected {} but stack was empty", TypeKind::Bool),
-                            span,
-                        ));
-                        TypedOp {
-                            ins: vec![TypeKind::Bool],
-                            outs: vec![],
-                            kind: TypedOpKind::If {
-                                body: vec![],
-                                else_body: None,
-                            },
-                        }
-                    }
-                },
+                }
             },
             OpKind::Binding { bindings, body } => {
                 let mut binding_identifiers = Vec::new();
@@ -957,9 +915,9 @@ impl TypeChecker {
     fn resolve_type_stack(&mut self, op: &Op, typed_op: &TypedOp) {
         for input in typed_op.ins.clone() {
             match self.type_stack.pop() {
-                Some((type_kind, span)) => self.expect_type(&type_kind, &input, op.span),
+                Some((type_kind, span)) => self.expect_type(&type_kind, &input, span),
                 None => self.diagnostics.push(Diagnostic::report_error(
-                    format!("Expected {} but stack was empty", input),
+                    format!("expected {} but stack was empty", input),
                     op.span,
                 )),
             }

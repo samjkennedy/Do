@@ -400,8 +400,8 @@ impl Parser {
 
                 if let OpKind::PushFunction(ops) = block.kind {
 
-                    //TODO: allow if/else if chains
-                    if tokens[self.cursor].kind == TokenKind::ElseKeyword {
+                    //TODO: allow if/else if chains with elif or something
+                    if self.cursor < tokens.len() && tokens[self.cursor].kind == TokenKind::ElseKeyword {
                         let else_keyword = self.expect_token(&TokenKind::ElseKeyword, tokens, token.span)?;
 
                         let open_curly =
