@@ -375,7 +375,7 @@ impl FasmEmitter {
             ByteCodeInstruction::Return => {
                 //TODO: push the return address back onto the stack from where it's saved
                 writeln!(self.out_file, "\tret")
-            },
+            }
         }
     }
 

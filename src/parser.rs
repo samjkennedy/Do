@@ -399,14 +399,20 @@ impl Parser {
                 let span = Span::from_to(token.span, block.span);
 
                 if let OpKind::PushFunction(ops) = block.kind {
-
                     //TODO: allow if/else if chains with elif or something
-                    if self.cursor < tokens.len() && tokens[self.cursor].kind == TokenKind::ElseKeyword {
-                        let else_keyword = self.expect_token(&TokenKind::ElseKeyword, tokens, token.span)?;
+                    if self.cursor < tokens.len()
+                        && tokens[self.cursor].kind == TokenKind::ElseKeyword
+                    {
+                        let else_keyword =
+                            self.expect_token(&TokenKind::ElseKeyword, tokens, token.span)?;
 
-                        let open_curly =
-                            self.expect_token(&TokenKind::OpenCurly, tokens, tokens[self.cursor].span)?;
-                        let else_block = self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
+                        let open_curly = self.expect_token(
+                            &TokenKind::OpenCurly,
+                            tokens,
+                            tokens[self.cursor].span,
+                        )?;
+                        let else_block =
+                            self.parse_block(&open_curly, tokens, TokenKind::CloseCurly)?;
 
                         let span = Span::from_to(else_keyword.span, else_block.span);
                         if let OpKind::PushFunction(else_ops) = else_block.kind {
@@ -432,14 +438,14 @@ impl Parser {
                 } else {
                     unreachable!()
                 }
-            },
+            }
             TokenKind::ElseKeyword => {
                 self.diagnostics.push(Diagnostic::report_error(
                     "`else` encountered without corresponding `if`".to_string(),
                     token.span,
                 ));
                 None
-            },
+            }
             TokenKind::Error(_) => None,
         }
     }

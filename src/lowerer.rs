@@ -67,7 +67,7 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Print => 0x18,
             ByteCodeInstruction::PrintList => 0x19,
             ByteCodeInstruction::Label(_) => 0x1A,
-            ByteCodeInstruction::Call { .. } => 0x1B,
+            ByteCodeInstruction::Call => 0x1B,
             ByteCodeInstruction::Jump { .. } => 0x1C,
             ByteCodeInstruction::JumpIfFalse { .. } => 0x1D,
             ByteCodeInstruction::Return => 0x1E,
@@ -78,16 +78,16 @@ impl ByteCodeInstruction {
         }
     }
 
-    pub fn to_binary(self) -> Vec<usize> {
+    pub fn to_binary(&self) -> Vec<usize> {
         match self {
-            ByteCodeInstruction::Push(value) => vec![self.get_opcode(), value],
+            ByteCodeInstruction::Push(value) => vec![self.get_opcode(), *value],
             ByteCodeInstruction::Pop => vec![self.get_opcode()],
             ByteCodeInstruction::NewList => vec![self.get_opcode()],
             ByteCodeInstruction::ListLen => vec![self.get_opcode()],
             ByteCodeInstruction::ListGet => vec![self.get_opcode()],
-            ByteCodeInstruction::PushBlock { index } => vec![self.get_opcode(), index],
-            ByteCodeInstruction::Load { index } => vec![self.get_opcode(), index],
-            ByteCodeInstruction::Store { index } => vec![self.get_opcode(), index],
+            ByteCodeInstruction::PushBlock { index } => vec![self.get_opcode(), *index],
+            ByteCodeInstruction::Load { index } => vec![self.get_opcode(), *index],
+            ByteCodeInstruction::Store { index } => vec![self.get_opcode(), *index],
             ByteCodeInstruction::Dup => vec![self.get_opcode()],
             ByteCodeInstruction::Over => vec![self.get_opcode()],
             ByteCodeInstruction::Rot => vec![self.get_opcode()],
@@ -106,11 +106,11 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Eq => vec![self.get_opcode()],
             ByteCodeInstruction::Print => vec![self.get_opcode()],
             ByteCodeInstruction::PrintList => vec![self.get_opcode()],
-            ByteCodeInstruction::Label(label) => vec![self.get_opcode(), label],
+            ByteCodeInstruction::Label(label) => vec![self.get_opcode(), *label],
             ByteCodeInstruction::Call => vec![self.get_opcode()],
             ByteCodeInstruction::CallNamed(_) => todo!(),
-            ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), label],
-            ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), label],
+            ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), *label],
+            ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), *label],
             ByteCodeInstruction::Return => vec![self.get_opcode()],
             ByteCodeInstruction::PrintBool => vec![self.get_opcode()],
         }
