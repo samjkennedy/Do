@@ -147,7 +147,7 @@ impl FasmEmitter {
         Ok(())
     }
 
-    fn emit_op(&mut self, opcode: &ByteCodeInstruction, _constants: &[String]) -> Result<()> {
+    fn emit_op(&mut self, opcode: &ByteCodeInstruction, constants: &[String]) -> Result<()> {
         writeln!(self.out_file, "; --- {:?} ---", opcode)?;
         match opcode {
             ByteCodeInstruction::Push(value) => writeln!(self.out_file, "\tpush {}", value),
@@ -354,13 +354,14 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tpush rax")
             }
             ByteCodeInstruction::Label(label) => writeln!(self.out_file, ".label_{}:", label),
-            ByteCodeInstruction::Call => {
+            ByteCodeInstruction::CallDynamic => {
                 //Get pointer to function from the stack
                 writeln!(self.out_file, "\tpop rax")?;
                 writeln!(self.out_file, "\tcall rax")?;
                 Ok(())
             }
-            ByteCodeInstruction::CallNamed(name) => {
+            ByteCodeInstruction::CallStatic { index } => {
+                let name = &constants[*index];
                 writeln!(self.out_file, "\tcall {}", name)?;
                 Ok(())
             }

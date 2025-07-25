@@ -4,11 +4,11 @@ use std::collections::HashMap;
 pub struct BytecodeInterpreter {
     pc: usize,
     rom: Vec<usize>,
-    stack: Vec<usize>,
-    heap: Vec<usize>,
+    pub stack: Vec<usize>,
+    pub heap: Vec<usize>,
     locals: Vec<usize>,
     labels: Vec<usize>,
-    rsp: usize,
+    return_stack: Vec<usize>,
 }
 
 impl BytecodeInterpreter {
@@ -21,7 +21,7 @@ impl BytecodeInterpreter {
             heap: Vec::new(),
             locals,
             labels: Vec::new(),
-            rsp: 0,
+            return_stack: Vec::new(),
         }
     }
 
@@ -205,18 +205,25 @@ impl BytecodeInterpreter {
                 }
                 println!("]");
             }
-            ByteCodeInstruction::Call | ByteCodeInstruction::CallNamed(_) => {
+            ByteCodeInstruction::CallDynamic => {
                 let func = self.stack.pop().unwrap();
                 let name = &constants[func];
                 let addr = functions.get(name).unwrap();
 
-                self.rsp = self.pc;
+                self.return_stack.push(self.pc);
+
+                self.pc = *addr;
+            }
+            ByteCodeInstruction::CallStatic { index } => {
+                let name = &constants[*index];
+                let addr = functions.get(name).unwrap();
+
+                self.return_stack.push(self.pc);
 
                 self.pc = *addr;
             }
             ByteCodeInstruction::Return => {
-                self.pc = self.rsp;
-                self.rsp = 0;
+                self.pc = self.return_stack.pop().unwrap();
             }
             ByteCodeInstruction::Store { index } => {
                 if self.locals.len() <= *index {

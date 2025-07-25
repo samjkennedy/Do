@@ -166,7 +166,7 @@ impl TypeChecker {
         typed_ops
     }
 
-    fn erase(&self, type_kind: &TypeKind) -> Option<TypeKind> {
+    pub fn erase(&self, type_kind: &TypeKind) -> Option<TypeKind> {
         match type_kind {
             TypeKind::Generic(index) => match self.erasures.get(*index).unwrap() {
                 Some(erasure) => self.erase(erasure),
@@ -1015,7 +1015,7 @@ impl TypeChecker {
 
     fn peek_type(&mut self, span: Span) -> Option<(TypeKind, Span)> {
         match self.type_stack.last() {
-            Some((type_kind, span)) => Some((type_kind.clone(), span.clone())),
+            Some((type_kind, span)) => Some((type_kind.clone(), *span)),
             None => {
                 if self.in_block {
                     let generic = self.create_generic();
