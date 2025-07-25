@@ -7,8 +7,7 @@
 # The Do Programming Language
 
 Do is a stack-based, strongly typed, functional programming language designed around composition, inference, and lists.
-The
-concatenation of two programs is their composition.
+The concatenation of two programs is their composition, that is `f(g(x))` is `x g f`
 
 It draws inspiration from Forth, Porth, Factor and Joy, combining postfix syntax with Hindley-Milner-esque
 type inference and first-class functions.

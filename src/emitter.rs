@@ -4,7 +4,7 @@ use std::io::Result;
 use std::io::Write;
 
 pub struct FasmEmitter {
-    labels: usize, //TODO: this is just a massive hack to emit multiple newList ops
+    labels: usize,
     out_file: File,
 }
 
@@ -47,9 +47,6 @@ impl FasmEmitter {
         }
 
         self.emit_prologue()?;
-
-        self.out_file.flush()?;
-
         Ok(())
     }
 
