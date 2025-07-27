@@ -1,3 +1,4 @@
+use std::cmp::max;
 use crate::typechecker::{TypeKind, TypedOp, TypedOpKind};
 use std::collections::HashMap;
 
@@ -205,6 +206,7 @@ pub struct Lowerer {
     bindings: HashMap<String, usize>,
     fns_to_emit: HashMap<String, Vec<ByteCodeInstruction>>,
     locals_count: usize,
+    max_locals: usize,
 }
 
 pub struct StackFrame {
@@ -221,6 +223,7 @@ impl Lowerer {
             bindings: HashMap::new(),
             fns_to_emit: HashMap::new(),
             locals_count: 0,
+            max_locals: 0,
         }
     }
 
@@ -230,7 +233,7 @@ impl Lowerer {
         let bytecode = self.lower_ops(ops);
         let frame = StackFrame {
             instructions: bytecode,
-            max_locals: self.locals_count,
+            max_locals: self.max_locals,
         };
 
         // println!("stack frame max locals: {}", frame.max_locals);
@@ -241,7 +244,7 @@ impl Lowerer {
         for (name, fn_to_emit) in &self.fns_to_emit {
             let frame = StackFrame {
                 instructions: fn_to_emit.clone(),
-                max_locals: self.locals_count,
+                max_locals: self.max_locals,
             };
             self.locals_count = 0;
             self.bindings = HashMap::new();
@@ -541,10 +544,17 @@ impl Lowerer {
                     self.bindings.insert(binding.clone(), local);
                 }
 
-                //TODO: it should be possible to reuse locals since now we've left their scope
-
                 for op in body {
                     bytecode.extend(self.lower_op(op));
+                }
+
+                //Keep track of the maximum number of locals we use over the binding
+                self.max_locals = max(self.max_locals, self.locals_count);
+
+                //Unbind locals to reuse their space on the stack
+                for binding in bindings {
+                    self.locals_count -= 1;
+                    self.bindings.remove(binding);
                 }
 
                 bytecode

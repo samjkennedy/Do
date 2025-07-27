@@ -24,18 +24,42 @@ impl FasmEmitter {
             writeln!(self.out_file, "{}:", name)?;
             //subtract from rsp the number of locals
 
+            let mut num_locals = frame.max_locals;
+
             if name != "main" {
                 //TODO: pop the return address from the stack and save it somewhere to return to later
                 //      needs to be pushed onto a stack somewhere so that multiple calls can return and unwind the stack
+
+                num_locals += 2;
             }
 
-            if frame.max_locals > 0 {
-                writeln!(self.out_file, "push rbp")?;
-                writeln!(self.out_file, "mov rbp, rsp")?;
-                writeln!(self.out_file, "sub rsp, {}", frame.max_locals * 8)?;
+            if num_locals > 0 {
+                writeln!(self.out_file, ";allocate room on the stack for locals")?;
+                if name != "main" {
+                    writeln!(self.out_file, "\tpop rax")?;
+                }
+                writeln!(self.out_file, "\tpush rbp")?;
+                writeln!(self.out_file, "\tmov rbp, rsp")?;
+                writeln!(self.out_file, "\tsub rsp, {}", num_locals * 8)?;
+
+                if name != "main" {
+                    writeln!(self.out_file, ";store return address at the last local")?;
+                    //store the return address at the last local
+                    writeln!(self.out_file, "\tmov [rbp - {}], rax", (num_locals - 1) * 8)?;
+                }
             }
 
             for op in &frame.instructions {
+                if let ByteCodeInstruction::Return = op {
+                    writeln!(self.out_file, ";load return address and unwind locals")?;
+                    //load return address into rax
+                    writeln!(self.out_file, "\tmov rax, [rbp - {}]", (num_locals - 1) * 8)?;
+                    writeln!(self.out_file, "\tpush rax")?;
+                    //Unwind locals
+                    writeln!(self.out_file, "\tadd rsp, {}", num_locals * 8)?;
+                    writeln!(self.out_file, "\tmov rsp, rbp")?;
+                    //push return address onto the stack
+                }
                 self.emit_op(op, constants)?;
             }
 
@@ -371,7 +395,6 @@ impl FasmEmitter {
                 writeln!(self.out_file, "\tjz .label_{}", label)
             }
             ByteCodeInstruction::Return => {
-                //TODO: push the return address back onto the stack from where it's saved
                 writeln!(self.out_file, "\tret")
             }
         }
