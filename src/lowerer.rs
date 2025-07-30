@@ -1,15 +1,25 @@
+use std::cmp::max;
 use crate::typechecker::{TypeKind, TypedOp, TypedOpKind};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ByteCodeInstruction {
+    //Pushes a literal onto the stack
     Push(usize),
+    //Pops a literal from the stack
     Pop,
+    //Pops a length from the stack and constructs a list from that many stack elements,
+    // pushing the pointer to the list back onto the stack
     NewList,
+    //Pops a pointer to a list and pushes the length of the list to the stack
     ListLen,
+    //Pops a pointer to a list and an index pushes that element of the list to the stack
     ListGet,
+    //Pushes a pointer to the function given by the index onto the stack
     PushBlock { index: usize },
+    //Push the local given by the index onto the stack
     Load { index: usize },
+    //Pop the index to a local and a value and store the value in the local
     Store { index: usize },
     Dup,
     Over,
@@ -31,8 +41,10 @@ pub enum ByteCodeInstruction {
     PrintBool,
     PrintList,
     Label(usize),
-    Call,
-    CallNamed(String),
+    //Call a known function by the index in the constant pool
+    CallStatic { index: usize },
+    //Pops a function pointer from the stack and calls it
+    CallDynamic,
     Jump { label: usize },
     JumpIfFalse { label: usize },
     Return,
@@ -67,14 +79,14 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Print => 0x18,
             ByteCodeInstruction::PrintList => 0x19,
             ByteCodeInstruction::Label(_) => 0x1A,
-            ByteCodeInstruction::Call => 0x1B,
-            ByteCodeInstruction::Jump { .. } => 0x1C,
-            ByteCodeInstruction::JumpIfFalse { .. } => 0x1D,
-            ByteCodeInstruction::Return => 0x1E,
-            ByteCodeInstruction::Inc => 0x1F,
-            ByteCodeInstruction::Dec => 0x20,
-            ByteCodeInstruction::PrintBool => 0x21,
-            ByteCodeInstruction::CallNamed(_) => 0x22,
+            ByteCodeInstruction::CallStatic { .. } => 0x1B,
+            ByteCodeInstruction::CallDynamic => 0x1C,
+            ByteCodeInstruction::Jump { .. } => 0x1D,
+            ByteCodeInstruction::JumpIfFalse { .. } => 0x1E,
+            ByteCodeInstruction::Return => 0x1F,
+            ByteCodeInstruction::Inc => 0x20,
+            ByteCodeInstruction::Dec => 0x21,
+            ByteCodeInstruction::PrintBool => 0x22,
         }
     }
 
@@ -107,8 +119,8 @@ impl ByteCodeInstruction {
             ByteCodeInstruction::Print => vec![self.get_opcode()],
             ByteCodeInstruction::PrintList => vec![self.get_opcode()],
             ByteCodeInstruction::Label(label) => vec![self.get_opcode(), *label],
-            ByteCodeInstruction::Call => vec![self.get_opcode()],
-            ByteCodeInstruction::CallNamed(_) => todo!(),
+            ByteCodeInstruction::CallStatic { index } => vec![self.get_opcode(), *index],
+            ByteCodeInstruction::CallDynamic => vec![self.get_opcode()],
             ByteCodeInstruction::Jump { label } => vec![self.get_opcode(), *label],
             ByteCodeInstruction::JumpIfFalse { label } => vec![self.get_opcode(), *label],
             ByteCodeInstruction::Return => vec![self.get_opcode()],
@@ -159,23 +171,29 @@ impl ByteCodeInstruction {
             0x18 => (ByteCodeInstruction::Print, 1),
             0x19 => (ByteCodeInstruction::PrintList, 1),
             0x1A => (ByteCodeInstruction::Label(arguments[0]), 2),
-            0x1B => (ByteCodeInstruction::Call, 1),
-            0x1C => (
+            0x1B => (
+                ByteCodeInstruction::CallStatic {
+                    index: arguments[0],
+                },
+                2,
+            ),
+            0x1C => (ByteCodeInstruction::CallDynamic, 1),
+            0x1D => (
                 ByteCodeInstruction::Jump {
                     label: arguments[0],
                 },
                 2,
             ),
-            0x1D => (
+            0x1E => (
                 ByteCodeInstruction::JumpIfFalse {
                     label: arguments[0],
                 },
                 2,
             ),
-            0x1E => (ByteCodeInstruction::Return, 1),
-            0x1F => (ByteCodeInstruction::Inc, 1),
-            0x20 => (ByteCodeInstruction::Dec, 1),
-            0x21 => (ByteCodeInstruction::PrintBool, 1),
+            0x1F => (ByteCodeInstruction::Return, 1),
+            0x20 => (ByteCodeInstruction::Inc, 1),
+            0x21 => (ByteCodeInstruction::Dec, 1),
+            0x22 => (ByteCodeInstruction::PrintBool, 1),
             _ => todo!("unhandled opcode {}", opcode),
         }
     }
@@ -188,6 +206,7 @@ pub struct Lowerer {
     bindings: HashMap<String, usize>,
     fns_to_emit: HashMap<String, Vec<ByteCodeInstruction>>,
     locals_count: usize,
+    max_locals: usize,
 }
 
 pub struct StackFrame {
@@ -204,6 +223,7 @@ impl Lowerer {
             bindings: HashMap::new(),
             fns_to_emit: HashMap::new(),
             locals_count: 0,
+            max_locals: 0,
         }
     }
 
@@ -213,7 +233,7 @@ impl Lowerer {
         let bytecode = self.lower_ops(ops);
         let frame = StackFrame {
             instructions: bytecode,
-            max_locals: self.locals_count,
+            max_locals: self.max_locals,
         };
 
         // println!("stack frame max locals: {}", frame.max_locals);
@@ -224,7 +244,7 @@ impl Lowerer {
         for (name, fn_to_emit) in &self.fns_to_emit {
             let frame = StackFrame {
                 instructions: fn_to_emit.clone(),
-                max_locals: self.locals_count,
+                max_locals: self.max_locals,
             };
             self.locals_count = 0;
             self.bindings = HashMap::new();
@@ -329,7 +349,7 @@ impl Lowerer {
                     //[el]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el func_ptr]
-                    ByteCodeInstruction::Call,
+                    ByteCodeInstruction::CallDynamic,
                     //['el...]
                     ByteCodeInstruction::Jump { label: cond },
                     ByteCodeInstruction::Label(end),
@@ -377,7 +397,7 @@ impl Lowerer {
                     //[el]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el func_ptr]
-                    ByteCodeInstruction::Call,
+                    ByteCodeInstruction::CallDynamic,
                     //[true/false...]
                     //Jump back to cond if predicate failed
                     ByteCodeInstruction::JumpIfFalse { label: cond },
@@ -436,7 +456,7 @@ impl Lowerer {
                     //[el acc]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el acc func_ptr]
-                    ByteCodeInstruction::Call,
+                    ByteCodeInstruction::CallDynamic,
                     //['el...]
                     ByteCodeInstruction::Store { index: acc_idx },
                     ByteCodeInstruction::Jump { label: cond },
@@ -475,7 +495,7 @@ impl Lowerer {
                     //[el]
                     ByteCodeInstruction::Load { index: func_idx },
                     //[el func_ptr]
-                    ByteCodeInstruction::Call,
+                    ByteCodeInstruction::CallDynamic,
                     //Increment the index
                     ByteCodeInstruction::Load { index: index_idx },
                     ByteCodeInstruction::Inc,
@@ -509,10 +529,11 @@ impl Lowerer {
                 }
             }
             TypedOpKind::Do => {
-                vec![ByteCodeInstruction::Call]
+                vec![ByteCodeInstruction::CallDynamic]
             }
             TypedOpKind::Call(name) => {
-                vec![ByteCodeInstruction::CallNamed(name.clone())]
+                let index = self.constant_pool.iter().position(|n| n == name).unwrap();
+                vec![ByteCodeInstruction::CallStatic { index }]
             }
             TypedOpKind::Binding { bindings, body } => {
                 let mut bytecode = Vec::new();
@@ -525,6 +546,15 @@ impl Lowerer {
 
                 for op in body {
                     bytecode.extend(self.lower_op(op));
+                }
+
+                //Keep track of the maximum number of locals we use over the binding
+                self.max_locals = max(self.max_locals, self.locals_count);
+
+                //Unbind locals to reuse their space on the stack
+                for binding in bindings {
+                    self.locals_count -= 1;
+                    self.bindings.remove(binding);
                 }
 
                 bytecode

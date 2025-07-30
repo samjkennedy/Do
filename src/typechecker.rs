@@ -156,7 +156,7 @@ impl TypeChecker {
                 let erased = self.erase(type_kind).unwrap_or(type_kind.clone());
                 self.diagnostics.push(Diagnostic::report_error(
                     format!(
-                        "Type stack must be empty at the end of the program, but got {}",
+                        "type stack must be empty at the end of the program, but got {}",
                         erased
                     ),
                     *span,
@@ -166,7 +166,7 @@ impl TypeChecker {
         typed_ops
     }
 
-    fn erase(&self, type_kind: &TypeKind) -> Option<TypeKind> {
+    pub fn erase(&self, type_kind: &TypeKind) -> Option<TypeKind> {
         match type_kind {
             TypeKind::Generic(index) => match self.erasures.get(*index).unwrap() {
                 Some(erasure) => self.erase(erasure),
@@ -750,7 +750,10 @@ impl TypeChecker {
             OpKind::DefineFunction { identifier, body } => {
                 if let TokenKind::Identifier(name) = &identifier.kind {
                     if let OpKind::PushFunction(ops) = &body.kind {
-                        let block = self.type_check_block(ops, span);
+                        
+                        //TODO: prime the subchecker's stack with the function ins
+                        let mut sub_checker = self.clone();
+                        let block = sub_checker.type_check_block(ops, span);
 
                         self.functions
                             .insert(name.clone(), (block.ins.clone(), block.outs.clone()));
@@ -1015,7 +1018,7 @@ impl TypeChecker {
 
     fn peek_type(&mut self, span: Span) -> Option<(TypeKind, Span)> {
         match self.type_stack.last() {
-            Some((type_kind, span)) => Some((type_kind.clone(), span.clone())),
+            Some((type_kind, span)) => Some((type_kind.clone(), *span)),
             None => {
                 if self.in_block {
                     let generic = self.create_generic();

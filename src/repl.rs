@@ -1,9 +1,11 @@
-use crate::interpreter::Interpreter;
+use crate::bytecode_interpreter::BytecodeInterpreter;
 use crate::lexer::Lexer;
+use crate::lowerer::Lowerer;
 use crate::parser::Parser;
-use crate::typechecker::TypeChecker;
+use crate::typechecker::{TypeChecker, TypeKind};
 use std::io;
 use std::io::Write;
+use std::iter::zip;
 
 const GREEN: &str = "\x1b[32m";
 const GREY: &str = "\x1b[2m";
@@ -15,7 +17,8 @@ pub fn repl_mode() -> anyhow::Result<()> {
     let mut lexer = Lexer::new();
     let mut parser = Parser::new();
     let mut type_checker = TypeChecker::new(false);
-    let mut interpreter = Interpreter::new();
+    let mut lowerer = Lowerer::new();
+    let mut interpreter = BytecodeInterpreter::new();
 
     print_input_symbol()?;
     for line in stdin.lines() {
@@ -53,7 +56,7 @@ pub fn repl_mode() -> anyhow::Result<()> {
 
                     //save the state of the stack before type checking, so we can rewind if there is an error
                     let type_checker_checkpoint = type_checker.clone();
-                    type_checker.type_check(&ops);
+                    let typed_ops = type_checker.type_check(&ops);
 
                     if !&type_checker.diagnostics.is_empty() {
                         for diagnostic in &type_checker.diagnostics {
@@ -65,23 +68,17 @@ pub fn repl_mode() -> anyhow::Result<()> {
                         continue;
                     }
 
-                    let interpreter_checkpoint = interpreter.clone();
-                    interpreter.interpret(&ops);
+                    let stack_frames = lowerer.lower(&typed_ops);
 
-                    if !&interpreter.diagnostics.is_empty() {
-                        for diagnostic in &interpreter.diagnostics {
-                            diagnostic.display_diagnostic("", &line);
-                        }
-                        //rewind
-                        interpreter = interpreter_checkpoint;
-                        print_input_symbol()?;
-                        continue;
-                    }
+                    interpreter.interpret(&stack_frames, &lowerer.constant_pool);
 
                     if !&interpreter.stack.is_empty() {
                         print!("{}", GREY);
-                        for value in &interpreter.stack {
-                            print!("{} ", value);
+                        for (value, (type_kind, _)) in
+                            zip(&interpreter.stack, &type_checker.type_stack)
+                        {
+                            print_value(*value, type_kind, &interpreter, &type_checker);
+                            print!(" ")
                         }
                         println!("{}", RESET);
                     }
@@ -94,6 +91,39 @@ pub fn repl_mode() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_value(
+    value: usize,
+    type_kind: &TypeKind,
+    interpreter: &BytecodeInterpreter,
+    type_checker: &TypeChecker,
+) {
+    match type_kind {
+        TypeKind::Bool => print!("{} ", if value > 0 { "true" } else { "false" }),
+        TypeKind::Int => print!("{}", value),
+        TypeKind::List(el_type) => {
+            print!("[");
+            let length = interpreter.heap[value];
+            for i in 1..length + 1 {
+                print_value(
+                    interpreter.heap[value + i],
+                    el_type,
+                    interpreter,
+                    type_checker,
+                );
+                if i < length {
+                    print!(" ")
+                }
+            }
+            print!("]");
+        }
+        TypeKind::Block { .. } => print!("fn"),
+        TypeKind::Generic(_) => match type_checker.erase(type_kind) {
+            None => print!("<?>"),
+            Some(type_kind) => print_value(value, &type_kind, interpreter, type_checker),
+        },
+    }
 }
 
 fn print_input_symbol() -> anyhow::Result<()> {

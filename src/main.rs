@@ -1,4 +1,5 @@
 use crate::emitter::FasmEmitter;
+use crate::typechecker::TypedOp;
 use anyhow::{Context, Error, Result};
 use bytecode_interpreter::BytecodeInterpreter;
 use lexer::{Lexer, Token};
@@ -13,7 +14,6 @@ use typechecker::TypeChecker;
 mod bytecode_interpreter;
 mod diagnostic;
 mod emitter;
-mod interpreter;
 mod lexer;
 mod lowerer;
 mod parser;
@@ -67,39 +67,7 @@ fn main() -> Result<()> {
 }
 
 fn interpret_file(input_path: &String) -> Result<(), Error> {
-    let input = fs::read_to_string(input_path)
-        .with_context(|| format!("Failed to read input file `{}`", input_path))?;
-
-    let mut lexer = Lexer::new();
-
-    let tokens: Vec<Token> = lexer.lex(&input);
-
-    if !lexer.diagnostics.is_empty() {
-        for diagnostic in lexer.diagnostics {
-            diagnostic.display_diagnostic(input_path, &input);
-        }
-        return Ok(());
-    }
-
-    let mut parser = Parser::new();
-    let ops = parser.parse(&tokens);
-
-    if !parser.diagnostics.is_empty() {
-        for diagnostic in parser.diagnostics {
-            diagnostic.display_diagnostic(input_path, &input);
-        }
-        return Ok(());
-    }
-
-    let mut type_checker = TypeChecker::new(true);
-    let typed_ops = type_checker.type_check(&ops);
-
-    if !type_checker.diagnostics.is_empty() {
-        for diagnostic in type_checker.diagnostics {
-            diagnostic.display_diagnostic(input_path, &input);
-        }
-        return Ok(());
-    }
+    let typed_ops = check_program(input_path)?;
 
     let mut lowerer = Lowerer::new();
     let bytecode = lowerer.lower(&typed_ops);
@@ -137,39 +105,7 @@ fn interpret_file(input_path: &String) -> Result<(), Error> {
 }
 
 fn compile_file(input_path: &String, run: bool, args: &[String]) -> Result<(), Error> {
-    let input = fs::read_to_string(input_path)
-        .with_context(|| format!("Failed to read input file `{}`", input_path))?;
-
-    let mut lexer = Lexer::new();
-
-    let tokens: Vec<Token> = lexer.lex(&input);
-
-    if !lexer.diagnostics.is_empty() {
-        for diagnostic in lexer.diagnostics {
-            diagnostic.display_diagnostic(input_path, &input);
-        }
-        return Ok(());
-    }
-
-    let mut parser = Parser::new();
-    let ops = parser.parse(&tokens);
-
-    if !parser.diagnostics.is_empty() {
-        for diagnostic in parser.diagnostics {
-            diagnostic.display_diagnostic(input_path, &input);
-        }
-        return Ok(());
-    }
-
-    let mut type_checker = TypeChecker::new(true);
-    let typed_ops = type_checker.type_check(&ops);
-
-    if !type_checker.diagnostics.is_empty() {
-        for diagnostic in type_checker.diagnostics {
-            diagnostic.display_diagnostic(input_path, &input);
-        }
-        return Ok(());
-    }
+    let typed_ops = check_program(input_path)?;
 
     let mut lowerer = Lowerer::new();
     let bytecode = lowerer.lower(&typed_ops);
@@ -210,4 +146,41 @@ fn compile_file(input_path: &String, run: bool, args: &[String]) -> Result<(), E
     }
 
     Ok(())
+}
+
+fn check_program(input_path: &String) -> Result<Vec<TypedOp>, Error> {
+    let input = fs::read_to_string(input_path)
+        .with_context(|| format!("Failed to read input file `{}`", input_path))?;
+
+    let mut lexer = Lexer::new();
+
+    let tokens: Vec<Token> = lexer.lex(&input);
+
+    if !lexer.diagnostics.is_empty() {
+        for diagnostic in lexer.diagnostics {
+            diagnostic.display_diagnostic(input_path, &input);
+        }
+        return Err(anyhow::anyhow!("Lexing failed"));
+    }
+
+    let mut parser = Parser::new();
+    let ops = parser.parse(&tokens);
+
+    if !parser.diagnostics.is_empty() {
+        for diagnostic in parser.diagnostics {
+            diagnostic.display_diagnostic(input_path, &input);
+        }
+        return Err(anyhow::anyhow!("Parsing failed"));
+    }
+
+    let mut type_checker = TypeChecker::new(true);
+    let typed_ops = type_checker.type_check(&ops);
+
+    if !type_checker.diagnostics.is_empty() {
+        for diagnostic in type_checker.diagnostics {
+            diagnostic.display_diagnostic(input_path, &input);
+        }
+        return Err(anyhow::anyhow!("Type checking failed"));
+    }
+    Ok(typed_ops)
 }
